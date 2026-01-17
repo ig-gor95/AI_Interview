@@ -1,3 +1,4 @@
 """WebSocket handlers"""
-# WebSocket handlers will be imported here
+from app.websocket.session import handle_session_websocket
 
+__all__ = ["handle_session_websocket"]

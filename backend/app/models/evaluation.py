@@ -8,21 +8,8 @@ import uuid
 from app.database import Base
 
 
-class Evaluation(Base):
-    """Evaluation model - Main evaluation result"""
-    __tablename__ = "evaluations"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), unique=True, nullable=False, index=True)
-    overall_score = Column(Integer, nullable=False)  # финальный балл (0-100)
-    summary = Column(Text, nullable=True)  # краткое резюме интервью
-    readiness = Column(String(500), nullable=True)  # готовность к работе
-    recommendation = Column(Text, nullable=True)  # рекомендация HR
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
-    # Relationships
-    interview = relationship("Interview", back_populates="evaluation")
+# Note: Evaluation models are now in session.py as SessionEvaluation
+# This file is kept for backward compatibility but should be removed after migration
     observations = relationship("EvaluationObservation", back_populates="evaluation", cascade="all, delete-orphan")
     strengths = relationship("EvaluationStrength", back_populates="evaluation", cascade="all, delete-orphan", order_by="EvaluationStrength.order_index")
     improvements = relationship("EvaluationImprovement", back_populates="evaluation", cascade="all, delete-orphan", order_by="EvaluationImprovement.order_index")

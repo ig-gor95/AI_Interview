@@ -1,28 +1,27 @@
 """Database models"""
 from app.models.user import User, UserRole
-from app.models.session import (
-    Session,
-    SessionQuestion,
-    SessionEvaluationCriterion,
-    SessionRequirement,
-    SessionConfig,
+from app.models.interview import (
+    Interview,
+    InterviewQuestion,
+    InterviewEvaluationCriterion,
+    InterviewRequirement,
+    InterviewConfig,
+    InterviewLink,
     Difficulty,
     Language,
     Personality,
     InterviewType,
 )
-from app.models.interview import (
-    Interview,
-    TranscriptMessage,
-    QuestionAnswer,
-    InterviewStatus,
-)
-from app.models.evaluation import (
-    Evaluation,
-    EvaluationObservation,
-    EvaluationStrength,
-    EvaluationImprovement,
-    EvaluationKeyPhrase,
+from app.models.session import (
+    Session,
+    SessionQuestionAnswer,
+    SessionTranscript,
+    SessionEvaluation,
+    SessionEvaluationObservation,
+    SessionEvaluationStrength,
+    SessionEvaluationImprovement,
+    SessionEvaluationKeyPhrase,
+    SessionStatus,
 )
 from app.models.simulation import (
     SimulationScenario,
@@ -37,27 +36,27 @@ __all__ = [
     # User
     "User",
     "UserRole",
-    # Session
-    "Session",
-    "SessionQuestion",
-    "SessionEvaluationCriterion",
-    "SessionRequirement",
-    "SessionConfig",
+    # Interview (шаблон интервью)
+    "Interview",
+    "InterviewQuestion",
+    "InterviewEvaluationCriterion",
+    "InterviewRequirement",
+    "InterviewConfig",
+    "InterviewLink",
     "Difficulty",
     "Language",
     "Personality",
     "InterviewType",
-    # Interview
-    "Interview",
-    "TranscriptMessage",
-    "QuestionAnswer",
-    "InterviewStatus",
-    # Evaluation
-    "Evaluation",
-    "EvaluationObservation",
-    "EvaluationStrength",
-    "EvaluationImprovement",
-    "EvaluationKeyPhrase",
+    # Session (конкретная сессия)
+    "Session",
+    "SessionQuestionAnswer",
+    "SessionTranscript",
+    "SessionEvaluation",
+    "SessionEvaluationObservation",
+    "SessionEvaluationStrength",
+    "SessionEvaluationImprovement",
+    "SessionEvaluationKeyPhrase",
+    "SessionStatus",
     # Simulation
     "SimulationScenario",
     "SimulationDialog",

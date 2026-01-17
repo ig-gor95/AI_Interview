@@ -13,7 +13,7 @@ class SimulationScenario(Base):
     __tablename__ = "simulation_scenarios"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), unique=True, nullable=False, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), unique=True, nullable=False, index=True)
     scenario_type = Column(String(255), nullable=False)  # тип сценария
     scenario_description = Column(Text, nullable=False)
     client_role = Column(String(255), nullable=False)  # роль клиента
@@ -21,7 +21,7 @@ class SimulationScenario(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    interview = relationship("Interview", back_populates="simulation_scenario")
+    session = relationship("Session", back_populates="simulation_scenario")
     dialog = relationship("SimulationDialog", back_populates="scenario", cascade="all, delete-orphan", order_by="SimulationDialog.order_index")
     
     def __repr__(self):

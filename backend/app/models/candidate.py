@@ -22,13 +22,13 @@ class CandidateStatus(Base):
     __tablename__ = "candidate_status"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), unique=True, nullable=False, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), unique=True, nullable=False, index=True)
     status = Column(Enum(CandidateStatusType), nullable=False, default=CandidateStatusType.NEW, index=True)
     notes = Column(Text, nullable=True)  # заметки HR
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    interview = relationship("Interview", back_populates="candidate_status")
+    session = relationship("Session", back_populates="candidate_status")
     
     def __repr__(self):
         return f"<CandidateStatus(id={self.id}, interview_id={self.interview_id}, status={self.status})>"

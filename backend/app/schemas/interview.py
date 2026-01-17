@@ -1,8 +1,8 @@
-"""Interview Pydantic schemas"""
+"""Interview Pydantic schemas - Legacy schemas, kept for backward compatibility"""
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from app.models.interview import InterviewStatus
+from app.models.session import SessionStatus
 
 
 class TranscriptMessage(BaseModel):
@@ -29,7 +29,7 @@ class InterviewResponse(BaseModel):
     candidate_id: Optional[str] = None
     candidate_name: str
     candidate_email: Optional[str] = None
-    status: InterviewStatus
+    status: SessionStatus
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime

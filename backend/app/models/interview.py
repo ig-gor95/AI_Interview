@@ -1,6 +1,6 @@
-"""Interview models - Active interviews with candidates"""
-from sqlalchemy import Column, String, Integer, Enum, DateTime, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
+"""Interview models - Interview templates created by HR"""
+from sqlalchemy import Column, String, Integer, Enum, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
@@ -9,77 +9,158 @@ import enum
 from app.database import Base
 
 
-class InterviewStatus(str, enum.Enum):
-    """Interview status enum"""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    ABANDONED = "abandoned"
+class Difficulty(str, enum.Enum):
+    """Difficulty level enum"""
+    BEGINNER = "beginner"
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+
+
+class Language(str, enum.Enum):
+    """Language enum"""
+    RU = "ru"
+    EN = "en"
+
+
+class Personality(str, enum.Enum):
+    """AI personality enum"""
+    FRIENDLY = "friendly"
+    PROFESSIONAL = "professional"
+    MOTIVATING = "motivating"
+
+
+class InterviewType(str, enum.Enum):
+    """Interview type enum"""
+    SCREENING = "screening"
+    TECHNICAL = "technical"
+    BEHAVIORAL = "behavioral"
+    MIXED = "mixed"
 
 
 class Interview(Base):
-    """Interview model - Active interview with candidate"""
-    __tablename__ = "interviews"
+    """Interview model - Interview template created by HR"""
+    __tablename__ = "interviews"  # будет переименовано из sessions через миграцию
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
-    candidate_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)  # может быть гость
-    candidate_name = Column(String(255), nullable=False)  # имя кандидата (если не зарегистрирован)
-    candidate_email = Column(String(255), nullable=True)  # email кандидата
-    status = Column(Enum(InterviewStatus), nullable=False, default=InterviewStatus.PENDING, index=True)
-    started_at = Column(DateTime(timezone=True), nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
-    audio_file_path = Column(String(1000), nullable=True)  # путь к аудио записи
+    organizer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(500), nullable=True)  # topic
+    position = Column(String(500), nullable=True)  # название вакансии
+    company = Column(String(255), nullable=True)
+    difficulty = Column(Enum(Difficulty), nullable=False, default=Difficulty.INTERMEDIATE)
+    duration = Column(Integer, nullable=False)  # в минутах
+    language = Column(Enum(Language), nullable=False, default=Language.RU)
+    personality = Column(Enum(Personality), nullable=False, default=Personality.PROFESSIONAL)
+    interview_type = Column(Enum(InterviewType), nullable=True)
+    passing_score = Column(Integer, nullable=True)  # минимальный проходной балл
+    share_url = Column(String(500), unique=True, nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     # Relationships
-    session = relationship("Session", back_populates="interviews")
-    candidate = relationship("User", foreign_keys=[candidate_id])
-    transcript_messages = relationship("TranscriptMessage", back_populates="interview", cascade="all, delete-orphan", order_by="TranscriptMessage.order_index")
-    evaluation = relationship("Evaluation", back_populates="interview", uselist=False, cascade="all, delete-orphan")
-    candidate_status = relationship("CandidateStatus", back_populates="interview", uselist=False, cascade="all, delete-orphan")
-    simulation_scenario = relationship("SimulationScenario", back_populates="interview", uselist=False, cascade="all, delete-orphan")
-    question_answers = relationship("QuestionAnswer", back_populates="interview", cascade="all, delete-orphan", order_by="QuestionAnswer.order_index")
+    questions = relationship("InterviewQuestion", back_populates="interview", cascade="all, delete-orphan")
+    evaluation_criteria = relationship("InterviewEvaluationCriterion", back_populates="interview", cascade="all, delete-orphan")
+    requirements = relationship("InterviewRequirement", back_populates="interview", cascade="all, delete-orphan")
+    config = relationship("InterviewConfig", back_populates="interview", uselist=False, cascade="all, delete-orphan")
+    sessions = relationship("Session", back_populates="interview")  # множество сессий для одного шаблона
+    links = relationship("InterviewLink", back_populates="interview", cascade="all, delete-orphan")
     
     def __repr__(self):
-        return f"<Interview(id={self.id}, session_id={self.session_id}, status={self.status})>"
+        return f"<Interview(id={self.id}, position={self.position}, organizer_id={self.organizer_id})>"
 
 
-class TranscriptMessage(Base):
-    """Transcript messages - Dialog messages"""
-    __tablename__ = "transcript_messages"
+class InterviewQuestion(Base):
+    """Interview questions - Template questions for interview"""
+    __tablename__ = "interview_questions"  # будет переименовано из session_questions через миграцию
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), nullable=False, index=True)
-    role = Column(String(10), nullable=False)  # 'ai' or 'user'
-    message_text = Column(Text, nullable=False)
-    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    audio_chunk_url = Column(String(1000), nullable=True)  # URL аудио chunk'а (для AI сообщений)
-    order_index = Column(Integer, nullable=False, default=0)  # порядок в диалоге
+    question_text = Column(Text, nullable=False)  # инструкция для GPT
+    order_index = Column(Integer, nullable=False, default=0)
+    parent_question_id = Column(UUID(as_uuid=True), ForeignKey("interview_questions.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    interview = relationship("Interview", back_populates="transcript_messages")
+    interview = relationship("Interview", back_populates="questions")
+    parent_question = relationship("InterviewQuestion", remote_side=[id], backref="clarifying_questions")
     
     def __repr__(self):
-        return f"<TranscriptMessage(id={self.id}, role={self.role}, order={self.order_index})>"
+        return f"<InterviewQuestion(id={self.id}, interview_id={self.interview_id}, order={self.order_index})>"
 
 
-class QuestionAnswer(Base):
-    """Question-answer pairs from interview"""
-    __tablename__ = "question_answers"
+class InterviewEvaluationCriterion(Base):
+    """Interview evaluation criteria"""
+    __tablename__ = "interview_evaluation_criteria"  # будет переименовано из session_evaluation_criteria через миграцию
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), nullable=False, index=True)
-    question_text = Column(Text, nullable=False)  # вопрос из session_questions
-    answer_text = Column(Text, nullable=False)  # ответ кандидата
-    analysis_note = Column(Text, nullable=True)  # анализ ответа AI
+    criterion_name = Column(String(255), nullable=False)
     order_index = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    interview = relationship("Interview", back_populates="question_answers")
+    interview = relationship("Interview", back_populates="evaluation_criteria")
     
     def __repr__(self):
-        return f"<QuestionAnswer(id={self.id}, interview_id={self.interview_id}, order={self.order_index})>"
+        return f"<InterviewEvaluationCriterion(id={self.id}, criterion={self.criterion_name})>"
 
+
+class InterviewRequirement(Base):
+    """Interview requirements for candidate"""
+    __tablename__ = "interview_requirements"  # будет переименовано из session_requirements через миграцию
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), nullable=False, index=True)
+    requirement_text = Column(Text, nullable=False)
+    order_index = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    interview = relationship("Interview", back_populates="requirements")
+    
+    def __repr__(self):
+        return f"<InterviewRequirement(id={self.id}, interview_id={self.interview_id})>"
+
+
+class InterviewConfig(Base):
+    """Interview configuration"""
+    __tablename__ = "interview_config"  # будет переименовано из session_config через миграцию
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), unique=True, nullable=False, index=True)
+    goals = Column(JSONB, nullable=True)  # массив целей
+    role_context = Column(Text, nullable=True)
+    context_description = Column(Text, nullable=True)
+    expected_knowledge = Column(Text, nullable=True)
+    interaction_style = Column(String(50), nullable=True)  # questions, practice, theory, mixed
+    focus_areas = Column(JSONB, nullable=True)  # массив областей фокуса
+    additional_instructions = Column(Text, nullable=True)
+    customer_simulation = Column(JSONB, nullable=True)  # объект с enabled, scenario, role
+    allow_dynamic_questions = Column(Boolean, nullable=True, default=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    interview = relationship("Interview", back_populates="config")
+    
+    def __repr__(self):
+        return f"<InterviewConfig(id={self.id}, interview_id={self.interview_id})>"
+
+
+class InterviewLink(Base):
+    """Interview link for candidate access"""
+    __tablename__ = "interview_links"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), nullable=False, index=True)
+    token = Column(String(500), unique=True, nullable=False, index=True)  # уникальный токен для URL
+    is_used = Column(Boolean, default=False, nullable=False)  # использована ли ссылка
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # срок действия
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=True, index=True)  # созданная сессия после регистрации
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    interview = relationship("Interview", back_populates="links")
+    session = relationship("Session", foreign_keys=[session_id], back_populates="link")
+    
+    def __repr__(self):
+        return f"<InterviewLink(id={self.id}, interview_id={self.interview_id}, token={self.token})>"

@@ -3,77 +3,225 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from typing import Optional
 import uuid
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
 
 from app.database import get_db
-from app.models.session import Session
+from app.models.interview import Interview, InterviewLink
+from app.models.session import Session, SessionStatus
 from app.models.user import User
-from app.schemas.session import SessionResponse
-from app.api.sessions import _session_to_params
+from app.schemas.session import SessionResponse, SessionParams, Question, CustomerSimulation
+from app.api.interviews import _interview_to_params
 
 router = APIRouter()
 
 
-@router.get("/session/{share_url:path}", response_model=SessionResponse)
-async def get_session_by_url(
-    share_url: str,
+class CandidateRegistrationData(BaseModel):
+    """Candidate registration data"""
+    firstName: str
+    lastName: str
+    email: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
+
+
+class InterviewResponse(BaseModel):
+    """Interview template response for public API"""
+    id: str
+    position: str
+    company: Optional[str] = None
+    params: SessionParams
+
+
+class SessionResponsePublic(BaseModel):
+    """Session response for public API"""
+    id: str
+    interview_id: str = Field(alias="interviewId")
+    candidate_name: str = Field(alias="candidateName")
+    candidate_surname: Optional[str] = Field(None, alias="candidateSurname")
+    candidate_email: Optional[str] = Field(None, alias="candidateEmail")
+    status: str
+    created_at: datetime = Field(alias="createdAt")
+    
+    class Config:
+        populate_by_name = True
+
+
+@router.get("/interview/{token}", response_model=InterviewResponse)
+async def get_interview_by_token(
+    token: str,
     db: AsyncSession = Depends(get_db)
 ):
+    """Get interview template by token (public endpoint for candidates)
+    
+    Returns information about the interview template without authentication
     """
-    Get session by share URL (public endpoint for candidates)
-    
-    share_url should be in format: /session/{session_id}
-    """
-    # Extract session ID from URL
-    if not share_url.startswith("/session/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid share URL format"
-        )
-    
-    session_id_str = share_url.replace("/session/", "").strip()
-    
-    try:
-        session_uuid = uuid.UUID(session_id_str)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid session ID"
-        )
-    
-    # Get session
+    # Get interview link
     result = await db.execute(
-        select(Session)
-        .options(
-            selectinload(Session.questions),
-            selectinload(Session.evaluation_criteria),
-            selectinload(Session.requirements),
-            selectinload(Session.config)
-        )
-        .where(Session.share_url == share_url, Session.is_active == True)
+        select(InterviewLink)
+        .options(selectinload(InterviewLink.interview))
+        .where(InterviewLink.token == token)
     )
-    session = result.scalar_one_or_none()
+    link = result.scalar_one_or_none()
     
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview link not found"
+        )
+    
+    # Check if link is expired
+    if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Interview link has expired"
+        )
+    
+    # Get interview
+    interview = link.interview
+    if not interview or not interview.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview not found or inactive"
+        )
+    
+    # Reload interview with relationships
+    await db.refresh(interview, ["questions", "config", "evaluation_criteria", "requirements"])
+    
+    params = await _interview_to_params(interview)
+    
+    return InterviewResponse(
+        id=str(interview.id),
+        position=interview.position or "",
+        company=interview.company,
+        params=params
+    )
+
+
+@router.post("/interview/{token}/register", response_model=SessionResponsePublic)
+async def register_candidate(
+    token: str,
+    candidate_data: CandidateRegistrationData,
+    db: AsyncSession = Depends(get_db)
+):
+    """Register candidate and create session (public endpoint)
+    
+    Creates a Session (concrete interview session) for the candidate
+    """
+    # Get interview link
+    result = await db.execute(
+        select(InterviewLink)
+        .options(selectinload(InterviewLink.interview))
+        .where(InterviewLink.token == token)
+    )
+    link = result.scalar_one_or_none()
+    
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview link not found"
+        )
+    
+    # Check if link is expired
+    if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Interview link has expired"
+        )
+    
+    # Check if link is already used
+    if link.is_used:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Interview link has already been used"
+        )
+    
+    # Get interview
+    interview = link.interview
+    if not interview or not interview.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview not found or inactive"
+        )
+    
+    # Create session
+    new_session = Session(
+        interview_id=interview.id,
+        candidate_name=candidate_data.firstName,
+        candidate_surname=candidate_data.lastName,
+        candidate_email=candidate_data.email,
+        status=SessionStatus.PENDING
+    )
+    
+    db.add(new_session)
+    await db.flush()  # Get session ID
+    
+    # Update link
+    link.is_used = True
+    link.session_id = new_session.id
+    
+    await db.commit()
+    await db.refresh(new_session)
+    
+    return SessionResponsePublic(
+        id=str(new_session.id),
+        interview_id=str(new_session.interview_id),
+        candidate_name=new_session.candidate_name,
+        candidate_surname=new_session.candidate_surname,
+        candidate_email=new_session.candidate_email,
+        status=new_session.status.value,
+        created_at=new_session.created_at
+    )
+
+
+@router.post("/interview/{token}/start")
+async def start_session(
+    token: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Start session after registration (public endpoint)
+    
+    Marks the session as IN_PROGRESS and returns session ID for WebSocket connection
+    """
+    # Get interview link with session
+    result = await db.execute(
+        select(InterviewLink)
+        .options(selectinload(InterviewLink.session))
+        .where(InterviewLink.token == token)
+    )
+    link = result.scalar_one_or_none()
+    
+    if not link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview link not found"
+        )
+    
+    if not link.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session not created. Please register first."
+        )
+    
+    session = link.session
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session not found or inactive"
+            detail="Session not found"
         )
     
-    # Get organizer name
-    organizer_result = await db.execute(
-        select(User).where(User.id == session.organizer_id)
-    )
-    organizer = organizer_result.scalar_one_or_none()
-    organizer_name = organizer.name if organizer else "Organizer"
+    # Update session status
+    if session.status == SessionStatus.PENDING:
+        session.status = SessionStatus.IN_PROGRESS
+        session.started_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(session)
     
-    return SessionResponse(
-        id=str(session.id),
-        organizer_id=str(session.organizer_id),
-        organizer_name=organizer_name,
-        params=_session_to_params(session),
-        share_url=session.share_url,
-        created_at=session.created_at,
-        updated_at=session.updated_at
-    )
-
+    return {
+        "sessionId": str(session.id),
+        "status": session.status.value,
+        "startedAt": session.started_at.isoformat() if session.started_at else None
+    }

@@ -2,7 +2,10 @@
 from openai import AsyncOpenAI
 from typing import Optional, List, Dict, Any
 import io
+import json
+import re
 from app.config import settings
+from app.schemas.session import GPTContextRequest, GPTResponse
 
 
 class OpenAIService:
@@ -362,4 +365,176 @@ Transcript:
             "keyPhrases": {"effective": [], "toImprove": []},
             "recommendation": "Review transcript manually"
         }
+    
+    async def generate_session_question_structured(
+        self, 
+        context: GPTContextRequest
+    ) -> GPTResponse:
+        """Генерирует вопрос с использованием структурированного контекста
+        
+        Args:
+            context: GPTContextRequest с полным контекстом интервью
+            
+        Returns:
+            GPTResponse со структурированным ответом
+        """
+        return await self.generate_session_question_with_json_mode(context)
+    
+    async def generate_session_question_with_json_mode(
+        self,
+        context: GPTContextRequest
+    ) -> GPTResponse:
+        """Использует JSON mode для гарантированного JSON ответа
+        
+        Args:
+            context: GPTContextRequest с полным контекстом интервью
+            
+        Returns:
+            GPTResponse со структурированным ответом от GPT
+        """
+        try:
+            # Формируем системный промпт
+            system_prompt = self._build_session_system_prompt(context)
+            
+            # Формируем промпт для GPT с инструкциями
+            user_prompt = self._build_session_user_prompt(context)
+            
+            # Подготовка сообщений
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            
+            # Вызов GPT API с JSON mode
+            response = await self.client.chat.completions.create(
+                model=self.model_gpt,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000,
+                response_format={"type": "json_object"}  # Включаем JSON mode
+            )
+            
+            response_text = response.choices[0].message.content
+            
+            # Парсим JSON ответ
+            try:
+                response_data = json.loads(response_text)
+                return GPTResponse(**response_data)
+            except json.JSONDecodeError:
+                # Если JSON невалидный, пытаемся извлечь его
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    response_data = json.loads(json_match.group())
+                    return GPTResponse(**response_data)
+                else:
+                    raise Exception(f"Invalid JSON response from GPT: {response_text}")
+                    
+        except Exception as e:
+            raise Exception(f"Error generating session question: {str(e)}")
+    
+    def _build_session_system_prompt(self, context: GPTContextRequest) -> str:
+        """Формирует системный промпт для интервью"""
+        interview = context.interview
+        personality_descriptions = {
+            "friendly": "дружелюбным, теплым и поддерживающим",
+            "professional": "профессиональным, вежливым и структурированным",
+            "motivating": "мотивирующим, энтузиастичным и поддерживающим"
+        }
+        
+        personality_desc = personality_descriptions.get(interview.personality, "профессиональным")
+        
+        prompt = f"""Ты AI-интервьюер, проводящий интервью для позиции: {interview.position}"""
+        
+        if interview.company:
+            prompt += f" в компании {interview.company}"
+        
+        prompt += f"""
+
+Твоя роль:
+- Проводи интервью {personality_desc} образом
+- Задавай релевантные вопросы на основе требований к позиции
+- Слушай активно и задавай уточняющие вопросы при необходимости
+- Держи ответы краткими и профессиональными
+- Веди беседу естественно
+"""
+        
+        if context.interview.instructions:
+            prompt += f"\nДополнительные инструкции: {context.interview.instructions}\n"
+        
+        prompt += """
+ВАЖНО: Ты должен возвращать ответ ТОЛЬКО в формате JSON. Структура ответа должна быть:
+{
+  "question": {
+    "text": "текст вопроса",
+    "type": "main" | "clarifying" | "dynamic",
+    "isClarifying": true/false,
+    "isDynamic": true/false,
+    "parentSessionQuestionAnswerId": "uuid или null"
+  },
+  "metadata": {
+    "needsClarification": true/false,
+    "answerQuality": "complete" | "partial" | "insufficient",
+    "shouldMoveNext": true/false,
+    "estimatedTimeRemaining": число (минуты)
+  },
+  "analysis": {
+    "keyPoints": ["ключевой момент 1", "ключевой момент 2"],
+    "suggestedFollowUps": ["вопрос 1", "вопрос 2"]
+  }
+}
+"""
+        
+        return prompt
+    
+    def _build_session_user_prompt(self, context: GPTContextRequest) -> str:
+        """Формирует пользовательский промпт с контекстом"""
+        interview = context.interview
+        remaining_minutes = context.remaining_time.minutes
+        
+        prompt = f"""Контекст интервью:
+
+Позиция: {interview.position}
+Компания: {interview.company or "Не указана"}
+Оставшееся время: {remaining_minutes} минут
+"""
+        
+        # Текущий вопрос из шаблона
+        if context.current_interview_question:
+            current_q = context.current_interview_question
+            prompt += f"""
+Текущий вопрос из шаблона:
+- Текст: {current_q.text}
+- Порядковый номер: {current_q.order_index + 1}
+"""
+            if current_q.clarifying_instructions:
+                prompt += f"- Инструкции по уточнению: {', '.join(current_q.clarifying_instructions)}\n"
+            if current_q.clarifying_questions:
+                prompt += f"- Возможные уточняющие вопросы: {', '.join(current_q.clarifying_questions)}\n"
+        
+        # История сессии
+        if context.session_history:
+            prompt += "\nИстория вопросов и ответов в этой сессии:\n"
+            for i, qa in enumerate(context.session_history, 1):
+                prompt += f"{i}. {qa.question_type.upper()}: {qa.question_text}\n"
+                prompt += f"   Ответ: {qa.answer_text}\n"
+        
+        # Последний ответ пользователя
+        if context.user_response:
+            prompt += f"\nПоследний ответ кандидата:\n{context.user_response.text}\n"
+        
+        # Прогресс
+        progress = context.question_progress
+        prompt += f"""
+Прогресс:
+- Текущий вопрос: {progress.current_question_index + 1} из {progress.total_questions}
+- Отвечено вопросов: {progress.answered_questions}
+"""
+        
+        # Разрешение на динамические вопросы
+        if context.allow_dynamic_questions:
+            prompt += "\nВАЖНО: Разрешены динамические вопросы. Ты можешь задавать дополнительные вопросы, которых нет в шаблоне.\n"
+        
+        prompt += "\nЗадай следующий вопрос на основе этого контекста. Верни ответ в JSON формате согласно структуре из системного промпта."
+        
+        return prompt
 
