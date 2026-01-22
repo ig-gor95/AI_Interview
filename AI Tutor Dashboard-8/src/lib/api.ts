@@ -217,6 +217,8 @@ export const publicAPI = {
         timestamp: string;
         audioUrl?: string;
       }>;
+      duration: number; // в минутах
+      remainingSeconds: number; // оставшееся время в секундах
     }>(`/interview/${token}/start`, {
       method: 'POST',
     });
