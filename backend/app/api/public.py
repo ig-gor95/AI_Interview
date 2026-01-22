@@ -227,6 +227,19 @@ async def start_session(
         await db.commit()
         await db.refresh(session)
     
+    # Загружаем интервью для получения длительности
+    result_interview = await db.execute(
+        select(Interview)
+        .where(Interview.id == session.interview_id)
+    )
+    interview = result_interview.scalar_one_or_none()
+    
+    if not interview:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview template not found"
+        )
+    
     # Загружаем историю транскрипта для восстановления
     transcript_history = []
     if is_resume and session.transcript_messages:
@@ -241,10 +254,21 @@ async def start_session(
             for msg in transcript_messages
         ]
     
+    # Вычисляем оставшееся время
+    duration_seconds = interview.duration * 60  # duration в минутах
+    remaining_seconds = duration_seconds
+    
+    if is_resume and session.started_at:
+        elapsed = datetime.now(timezone.utc) - session.started_at
+        elapsed_seconds = int(elapsed.total_seconds())
+        remaining_seconds = max(0, duration_seconds - elapsed_seconds)
+    
     return {
         "sessionId": str(session.id),
         "status": session.status.value,
         "startedAt": session.started_at.isoformat() if session.started_at else None,
         "isResume": is_resume,
-        "transcript": transcript_history if is_resume else []
+        "transcript": transcript_history if is_resume else [],
+        "duration": interview.duration,  # в минутах
+        "remainingSeconds": remaining_seconds  # оставшееся время в секундах
     }
