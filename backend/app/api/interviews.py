@@ -20,6 +20,7 @@ from app.models.interview import (
     Language, 
     Personality
 )
+from app.models.simulation import SimulationScenario
 from app.schemas.session import SessionCreate, SessionResponse, SessionListResponse, SessionParams, CustomerSimulation, Question
 from app.utils.auth import get_current_organizer
 from app.config import settings
@@ -120,6 +121,19 @@ async def create_interview(
         allow_dynamic_questions=session_data.params.allow_dynamic_questions
     )
     db.add(config)
+    await db.flush()  # Ensure config is saved before creating simulation scenario
+    
+    # Create SimulationScenario if customer simulation is enabled
+    if session_data.params.customer_simulation and session_data.params.customer_simulation.enabled:
+        simulation_scenario = SimulationScenario(
+            interview_id=new_interview.id,
+            session_id=None,  # This is for interview template, not a session
+            scenario_type="customer_simulation",
+            scenario_description=session_data.params.customer_simulation.scenario or "",
+            client_role=session_data.params.customer_simulation.role or "",
+            client_behavior=None  # Can be derived from scenario description if needed
+        )
+        db.add(simulation_scenario)
     
     await db.commit()
     await db.refresh(new_interview)

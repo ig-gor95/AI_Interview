@@ -184,12 +184,16 @@ async def start_session(
 ):
     """Start session after registration (public endpoint)
     
-    Marks the session as IN_PROGRESS and returns session ID for WebSocket connection
+    Marks the session as IN_PROGRESS and returns session ID for WebSocket connection.
+    If session is already IN_PROGRESS, returns resume flag and transcript history.
     """
     # Get interview link with session
     result = await db.execute(
         select(InterviewLink)
-        .options(selectinload(InterviewLink.session))
+        .options(
+            selectinload(InterviewLink.session).selectinload(Session.transcript_messages),
+            selectinload(InterviewLink.session).selectinload(Session.question_answers)
+        )
         .where(InterviewLink.token == token)
     )
     link = result.scalar_one_or_none()
@@ -213,15 +217,34 @@ async def start_session(
             detail="Session not found"
         )
     
-    # Update session status
+    # Проверяем, является ли это восстановлением незавершенной сессии
+    is_resume = session.status == SessionStatus.IN_PROGRESS
+    
+    # Update session status только если PENDING
     if session.status == SessionStatus.PENDING:
         session.status = SessionStatus.IN_PROGRESS
         session.started_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(session)
     
+    # Загружаем историю транскрипта для восстановления
+    transcript_history = []
+    if is_resume and session.transcript_messages:
+        transcript_messages = sorted(session.transcript_messages, key=lambda x: x.order_index)
+        transcript_history = [
+            {
+                "role": msg.role,
+                "message": msg.message_text,
+                "timestamp": msg.timestamp.isoformat(),
+                "audioUrl": msg.audio_chunk_url
+            }
+            for msg in transcript_messages
+        ]
+    
     return {
         "sessionId": str(session.id),
         "status": session.status.value,
-        "startedAt": session.started_at.isoformat() if session.started_at else None
+        "startedAt": session.started_at.isoformat() if session.started_at else None,
+        "isResume": is_resume,
+        "transcript": transcript_history if is_resume else []
     }

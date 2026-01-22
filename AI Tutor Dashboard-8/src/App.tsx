@@ -10,6 +10,7 @@ import { Header } from './components/Header';
 import { OrganizerDashboard } from './components/OrganizerDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { SessionView } from './components/SessionView';
+import { InterviewSessionView } from './components/InterviewSessionView';
 import { CandidateEvaluation } from './components/CandidateEvaluation';
 import { EvaluationDemo } from './components/EvaluationDemo';
 import { CandidateRegistration } from './components/CandidateRegistration';
@@ -236,82 +237,7 @@ function AppContent() {
 
   // Interview Session Page (public)
   const InterviewSessionPage = () => {
-    const { token } = useParams<{ token: string }>();
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-      const loadSession = async () => {
-        if (!token) {
-          setError('Токен не указан');
-          setIsLoading(false);
-          return;
-        }
-
-        try {
-          // Запустить сессию (получить session ID)
-          const response = await publicAPI.startSession(token);
-          setSessionId(response.sessionId);
-        } catch (error) {
-          console.error('Ошибка при загрузке сессии:', error);
-          setError(error instanceof Error ? error.message : 'Ошибка при загрузке сессии');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      loadSession();
-    }, [token]);
-
-    if (isLoading) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-            <p className="text-gray-600">Загрузка сессии интервью...</p>
-          </div>
-        </div>
-      );
-    }
-
-    if (error || !sessionId) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-            <p className="text-red-600 mb-4">{error || 'Сессия не найдена'}</p>
-            <button 
-              onClick={() => navigate(`/interview/${token}`)}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Вернуться к регистрации
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    // TODO: Create a proper InterviewSessionView component that connects via WebSocket
-    // For now, use the existing SessionView with a mock session
-    // The SessionView will need to be updated to work with WebSocket and session ID from token
-    const mockSession = {
-      id: sessionId,
-      organizerId: '',
-      organizerName: 'Interview Session',
-      params: {
-        position: 'Interview',
-        questions: []
-      },
-      createdAt: new Date().toISOString(),
-      shareUrl: `/interview/${token}`
-    };
-
-    return (
-      <SessionView
-        session={mockSession as any}
-        onComplete={() => navigate('/')}
-        onBack={() => navigate(`/interview/${token}`)}
-      />
-    );
+    return <InterviewSessionView />;
   };
 
   // Header wrapper component to check location

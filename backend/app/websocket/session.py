@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
 from app.models.session import Session, SessionStatus, SessionTranscript, SessionQuestionAnswer
 from app.models.interview import Interview, InterviewQuestion
+from app.models.simulation import SimulationScenario, SimulationDialog
 from app.services.openai_service import OpenAIService
 from app.services.audio_service import AudioService
 from app.services.session_service import (
@@ -141,13 +142,74 @@ async def handle_session_websocket(
         # Initialize audio service
         audio_service = AudioService()
         
+        # Проверяем, является ли это восстановлением сессии
+        is_resume = session.status == SessionStatus.IN_PROGRESS and len(session.transcript_messages) > 0
+        
         try:
-            # Send welcome message
-            await ws_manager.send_message(session_id, {
-                "type": "connected",
-                "message": "Подключено к интервью",
-                "session_id": session_id
-            })
+            if is_resume:
+                # Восстановление сессии - загружаем историю
+                transcript_messages = sorted(session.transcript_messages, key=lambda x: x.order_index)
+                question_answers = sorted(session.question_answers, key=lambda x: x.order_index) if session.question_answers else []
+                
+                # Определяем следующий вопрос из шаблона
+                main_questions = [q for q in interview.questions if q.parent_question_id is None]
+                main_questions.sort(key=lambda x: x.order_index)
+                
+                # Находим количество заданных основных вопросов
+                answered_main_count = len([qa for qa in question_answers if qa.question_type == "main"])
+                next_question_index = answered_main_count
+                
+                # Инициализируем session_state с историей
+                session_state = ws_manager.session_states[session_id]
+                session_state["transcript"] = [
+                    {
+                        "role": msg.role,
+                        "message": msg.message_text,
+                        "timestamp": msg.timestamp.isoformat()
+                    }
+                    for msg in transcript_messages
+                ]
+                session_state["current_question_index"] = next_question_index
+                session_state["started"] = True
+                
+                # Определяем, ожидаем ли мы ответа о готовности
+                # Если последнее сообщение от AI и это приветствие - ждем готовности
+                if transcript_messages and transcript_messages[-1].role == "ai":
+                    last_ai_msg = transcript_messages[-1].message_text.lower()
+                    if "готов" in last_ai_msg or "ready" in last_ai_msg:
+                        session_state["waiting_for_readiness"] = True
+                    else:
+                        session_state["waiting_for_readiness"] = False
+                else:
+                    session_state["waiting_for_readiness"] = False
+                
+                # Отправляем историю клиенту
+                await ws_manager.send_message(session_id, {
+                    "type": "resume",
+                    "message": "Сессия восстановлена",
+                    "session_id": session_id,
+                    "transcript": [
+                        {
+                            "role": msg.role,
+                            "message": msg.message_text,
+                            "timestamp": msg.timestamp.isoformat(),
+                            "audioUrl": msg.audio_chunk_url
+                        }
+                        for msg in transcript_messages
+                    ],
+                    "nextQuestionIndex": next_question_index
+                })
+            else:
+                # Новая сессия
+                try:
+                    # Send welcome message
+                    await ws_manager.send_message(session_id, {
+                        "type": "connected",
+                        "message": "Подключено к интервью",
+                        "session_id": session_id
+                    })
+                except Exception as e:
+                    print(f"Error sending welcome message: {e}")
             
             # Main message loop
             while True:
@@ -252,6 +314,7 @@ async def _handle_start_session(
     # Update session state
     session_state = ws_manager.session_states[session_id]
     session_state["started"] = True
+    session_state["waiting_for_readiness"] = True  # Флаг ожидания подтверждения готовности
     session_state["transcript"].append({
         "role": "ai",
         "message": greeting_text,
@@ -332,6 +395,79 @@ async def _process_user_response(
     """Process user response and generate next question"""
     session_state = ws_manager.session_states[session_id]
     
+    # Проверка на истечение времени
+    time_expired = session_state.get("time_expired", False)
+    
+    # Проверяем, истекло ли время
+    if session.started_at and interview.duration:
+        elapsed = datetime.now(timezone.utc) - session.started_at
+        elapsed_minutes = elapsed.total_seconds() / 60
+        if elapsed_minutes >= interview.duration and not time_expired:
+            # Время истекло - устанавливаем флаг и отправляем сообщение
+            session_state["time_expired"] = True
+            time_expired = True
+            
+            # Отправляем сообщение о завершении времени
+            await ws_manager.send_message(session_id, {
+                "type": "time_expired",
+                "message": "Время интервью истекло. Интервью завершено. Если у вас есть дополнительный вопрос или дополнение, вы можете его озвучить - эта информация будет добавлена к результатам.",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+    
+    if time_expired:
+        # Если время истекло, сохраняем дополнительное сообщение (если это не первое сообщение после истечения)
+        if session_state.get("additional_message_sent", False):
+            # Уже отправили дополнительное сообщение - завершаем сессию
+            await _handle_end_session(session_id, session, db)
+            return
+        else:
+            # Первое дополнительное сообщение после истечения времени
+            session_state["additional_message_sent"] = True
+            
+            result = await db.execute(
+                select(SessionTranscript)
+                .where(SessionTranscript.session_id == session.id)
+                .order_by(SessionTranscript.order_index.desc())
+            )
+            last_transcript = result.scalar_one_or_none()
+            next_order_index = (last_transcript.order_index + 1) if last_transcript else 0
+            
+            # Сохраняем дополнительное сообщение
+            user_message = SessionTranscript(
+                session_id=session.id,
+                role="user",
+                message_text=user_text,
+                timestamp=datetime.now(timezone.utc),
+                order_index=next_order_index
+            )
+            db.add(user_message)
+            await db.commit()
+            
+            # После сохранения дополнительного сообщения завершаем сессию
+            await _handle_end_session(session_id, session, db)
+            return
+    
+    # Проверка ожидания подтверждения готовности
+    waiting_for_readiness = session_state.get("waiting_for_readiness", False)
+    if waiting_for_readiness:
+        # Анализируем ответ о готовности (простая проверка ключевых слов)
+        user_text_lower = user_text.lower()
+        ready_keywords = ["да", "готов", "готовы", "конечно", "начинаем", "можно", "давай", "начнем"]
+        not_ready_keywords = ["нет", "не готов", "не готовы", "подожди", "подождите", "минуту", "секунду"]
+        
+        is_ready = any(keyword in user_text_lower for keyword in ready_keywords)
+        is_not_ready = any(keyword in user_text_lower for keyword in not_ready_keywords)
+        
+        if is_ready and not is_not_ready:
+            # Пользователь готов - сбрасываем флаг и продолжаем с первым вопросом
+            session_state["waiting_for_readiness"] = False
+            session_state["current_question_index"] = 0
+        elif is_not_ready:
+            # Пользователь не готов - GPT должен попросить подать сигнал
+            # Продолжаем с флагом waiting_for_readiness = True
+            pass
+        # Если ответ неясный, GPT сам решит что делать
+    
     # Get current order index
     result = await db.execute(
         select(SessionTranscript)
@@ -350,6 +486,35 @@ async def _process_user_response(
         order_index=next_order_index
     )
     db.add(user_message)
+    
+    # Если симуляция активна, сохраняем ответ пользователя в SimulationDialog
+    if session_state.get("simulation_active", False):
+        result = await db.execute(
+            select(SimulationScenario)
+            .where(SimulationScenario.session_id == session.id)
+        )
+        scenario = result.scalar_one_or_none()
+        
+        if scenario:
+            # Получаем последний order_index для диалога
+            result = await db.execute(
+                select(SimulationDialog)
+                .where(SimulationDialog.scenario_id == scenario.id)
+                .order_by(SimulationDialog.order_index.desc())
+            )
+            last_dialog = result.scalar_one_or_none()
+            dialog_order = (last_dialog.order_index + 1) if last_dialog else 0
+            
+            # Сохраняем ответ пользователя в диалог симуляции
+            user_simulation_dialog = SimulationDialog(
+                scenario_id=scenario.id,
+                role="user",
+                message_text=user_text,
+                tone=None,
+                order_index=dialog_order
+            )
+            db.add(user_simulation_dialog)
+    
     await db.commit()
     
     session_state["transcript"].append({
@@ -400,18 +565,32 @@ async def _process_user_response(
     last_ai_message = result.scalar_one_or_none()
     last_question_text = last_ai_message.message_text if last_ai_message else "Приветствие"
     
-    # Save question-answer
-    qa = await save_session_question_answer(
-        db=db,
-        session_id=session.id,
-        question_text=last_question_text,
-        answer_text=user_text,
-        question_type=question_type,
-        parent_session_qa_id=parent_qa_id
-    )
-    
-    # Build GPT context with user response
-    context = await _build_gpt_context(session, interview, db, user_response_text=user_text)
+    # Проверяем, есть ли ожидающий вопрос из шаблона после динамического вопроса
+    pending_template_question = session_state.get("pending_template_question")
+    if pending_template_question:
+        # Пользователь ответил на динамический вопрос, теперь задаем вопрос из шаблона
+        session_state.pop("pending_template_question", None)
+        # Используем сохраненный вопрос из шаблона
+        context = await _build_gpt_context(session, interview, db, user_response_text=user_text)
+        # Принудительно устанавливаем текущий вопрос из шаблона
+        context.current_interview_question = pending_template_question
+        # Обновляем индекс вопроса
+        session_state["current_question_index"] = pending_template_question.order_index
+    else:
+        # Обычная обработка - сохраняем question-answer если это не ответ о готовности
+        if not waiting_for_readiness or session_state.get("waiting_for_readiness") == False:
+            qa = await save_session_question_answer(
+                db=db,
+                session_id=session.id,
+                question_text=last_question_text,
+                answer_text=user_text,
+                question_type=question_type,
+                parent_session_qa_id=parent_qa_id
+            )
+            session_state["last_question_qa_id"] = qa.id
+        
+        # Build GPT context with user response
+        context = await _build_gpt_context(session, interview, db, user_response_text=user_text)
     
     # Generate next question using structured GPT API
     gpt_response = await openai_service.generate_session_question_structured(context)
@@ -430,6 +609,82 @@ async def _process_user_response(
     if next_question_type == "dynamic" and not interview.config.allow_dynamic_questions:
         # Fallback to clarifying if dynamic questions not allowed
         next_question_type = "clarifying"
+    
+    # Проверяем, активирована ли симуляция (customer_simulation)
+    # Симуляция активируется, если все вопросы заданы или осталось мало времени
+    # и GPT начинает играть роль клиента
+    simulation_active = False
+    if interview.config and interview.config.customer_simulation:
+        cs_data = interview.config.customer_simulation
+        if isinstance(cs_data, dict) and cs_data.get("enabled"):
+            # Проверяем условия для активации симуляции
+            all_questions_asked = context.question_progress.current_question_index >= context.question_progress.total_questions
+            time_low = context.remaining_time.minutes < 5
+            
+            # Проверяем, не создан ли уже SimulationScenario
+            result = await db.execute(
+                select(SimulationScenario)
+                .where(SimulationScenario.session_id == session.id)
+            )
+            existing_scenario = result.scalar_one_or_none()
+            
+            # Если симуляция должна быть активирована и еще не создана
+            if (all_questions_asked or time_low) and not existing_scenario:
+                # Создаем SimulationScenario для сессии
+                simulation_scenario = SimulationScenario(
+                    session_id=session.id,
+                    interview_id=None,  # Для сессии не нужен interview_id
+                    scenario_type="customer_simulation",
+                    scenario_description=cs_data.get("scenario", ""),
+                    client_role=cs_data.get("role", ""),
+                    client_behavior=None
+                )
+                db.add(simulation_scenario)
+                await db.commit()
+                await db.refresh(simulation_scenario)
+                simulation_active = True
+                session_state["simulation_active"] = True
+            elif existing_scenario:
+                simulation_active = True
+                session_state["simulation_active"] = True
+    
+    # Обработка динамических вопросов: если isDynamic=true, запоминаем что нужно задать вопрос из шаблона после ответа
+    if gpt_response.question.isDynamic and context.current_interview_question:
+        # Сохраняем текущий вопрос из шаблона, чтобы задать его после ответа на динамический
+        session_state["pending_template_question"] = context.current_interview_question
+        # НЕ увеличиваем current_question_index, так как вопрос из шаблона еще не задан
+    elif next_question_type == "main" and not gpt_response.question.isDynamic:
+        # Если задан основной вопрос из шаблона, увеличиваем индекс
+        session_state["current_question_index"] = session_state.get("current_question_index", 0) + 1
+    
+    # Если симуляция активна, сохраняем диалог в SimulationDialog
+    if simulation_active:
+        result = await db.execute(
+            select(SimulationScenario)
+            .where(SimulationScenario.session_id == session.id)
+        )
+        scenario = result.scalar_one_or_none()
+        
+        if scenario:
+            # Получаем последний order_index для диалога
+            result = await db.execute(
+                select(SimulationDialog)
+                .where(SimulationDialog.scenario_id == scenario.id)
+                .order_by(SimulationDialog.order_index.desc())
+            )
+            last_dialog = result.scalar_one_or_none()
+            dialog_order = (last_dialog.order_index + 1) if last_dialog else 0
+            
+            # Сохраняем сообщение AI в диалог симуляции
+            simulation_dialog = SimulationDialog(
+                scenario_id=scenario.id,
+                role="ai",
+                message_text=next_question_text,
+                tone=None,  # Можно определить по контексту
+                order_index=dialog_order
+            )
+            db.add(simulation_dialog)
+            await db.commit()
     
     # Save next question-answer (question asked by GPT)
     # We save it with empty answer for now, answer will be filled when user responds
@@ -475,8 +730,10 @@ async def _process_user_response(
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
     
-    # Update session state
-    session_state["last_question_qa_id"] = qa.id
+    # Update session state (только если qa был создан)
+    if not waiting_for_readiness or session_state.get("waiting_for_readiness") == False:
+        if 'qa' in locals() and qa:
+            session_state["last_question_qa_id"] = qa.id
     
     # Send AI response to client
     await ws_manager.send_message(session_id, {
@@ -534,7 +791,22 @@ async def _build_gpt_context(
     
     current_interview_question = None
     session_state = ws_manager.session_states.get(str(session.id), {})
+    
+    # Определяем следующий вопрос из шаблона
+    # При восстановлении сессии определяем на основе уже заданных вопросов
     current_question_index = session_state.get("current_question_index", 0)
+    
+    # Если current_question_index не установлен или равен 0, но есть история, определяем его на основе истории
+    if current_question_index == 0 and len(session.transcript_messages) > 1:  # > 1 потому что есть приветствие
+        # Получаем все заданные вопросы из истории
+        session_history_list = await get_session_question_answer_summaries(db, session.id)
+        answered_main_questions = [qa for qa in session_history_list if qa.question_type == "main"]
+        
+        if answered_main_questions:
+            # Находим количество заданных основных вопросов
+            # Следующий вопрос = количество заданных
+            current_question_index = len(answered_main_questions)
+            session_state["current_question_index"] = current_question_index
     
     if current_question_index < len(main_questions):
         current_question = main_questions[current_question_index]

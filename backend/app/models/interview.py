@@ -64,6 +64,7 @@ class Interview(Base):
     config = relationship("InterviewConfig", back_populates="interview", uselist=False, cascade="all, delete-orphan")
     sessions = relationship("Session", back_populates="interview")  # множество сессий для одного шаблона
     links = relationship("InterviewLink", back_populates="interview", cascade="all, delete-orphan")
+    simulation_scenarios = relationship("SimulationScenario", back_populates="interview", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Interview(id={self.id}, position={self.position}, organizer_id={self.organizer_id})>"

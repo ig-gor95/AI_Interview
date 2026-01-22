@@ -210,6 +210,13 @@ export const publicAPI = {
       sessionId: string;
       status: string;
       startedAt: string | null;
+      isResume: boolean;
+      transcript: Array<{
+        role: string;
+        message: string;
+        timestamp: string;
+        audioUrl?: string;
+      }>;
     }>(`/interview/${token}/start`, {
       method: 'POST',
     });
