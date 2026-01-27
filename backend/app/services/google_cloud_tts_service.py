@@ -8,7 +8,7 @@ from google.cloud import texttospeech
 class GoogleCloudTTSService:
     """Service for Google Cloud Text-to-Speech with Russian voices"""
 
-    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Wavenet-A", language_code: str = "ru-RU"):
+    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Chirp3-HD-Audio-001", language_code: str = "ru-RU"):
         # Set credentials path if provided
         if credentials_path:
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
@@ -55,11 +55,11 @@ class GoogleCloudTTSService:
             # Set the text input
             synthesis_input = texttospeech.SynthesisInput(text=text)
 
-            # Build the voice request
+            # Build the voice request (Leda / Chirp3 HD)
             voice = texttospeech.VoiceSelectionParams(
                 language_code=language_code,
                 name=voice_name,
-                ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+                ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL,
             )
 
             # Select the audio file type and configuration
@@ -87,6 +87,29 @@ class GoogleCloudTTSService:
 
         except Exception as e:
             print(f"[GoogleCloudTTS] ERROR: {str(e)}")
+            if voice_name and voice_name != "ru-RU-Wavenet-A":
+                print(f"[GoogleCloudTTS] Retrying with ru-RU-Wavenet-A...")
+                try:
+                    voice = texttospeech.VoiceSelectionParams(
+                        language_code=language_code or "ru-RU",
+                        name="ru-RU-Wavenet-A",
+                        ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL,
+                    )
+                    response = self.client.synthesize_speech(
+                        input=texttospeech.SynthesisInput(text=text),
+                        voice=voice,
+                        audio_config=texttospeech.AudioConfig(
+                            audio_encoding=texttospeech.AudioEncoding.MP3,
+                            speaking_rate=1.0,
+                            pitch=0.0,
+                        ),
+                    )
+                    audio_bytes = response.audio_content
+                    if audio_bytes:
+                        print("[GoogleCloudTTS] Audio generated with Wavenet fallback")
+                        return audio_bytes
+                except Exception as e2:
+                    print(f"[GoogleCloudTTS] Fallback failed: {e2}")
             import traceback
             traceback.print_exc()
             raise Exception(f"Error converting text to speech with Google Cloud: {str(e)}")

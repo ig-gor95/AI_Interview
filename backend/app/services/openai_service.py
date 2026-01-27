@@ -1,4 +1,6 @@
 """AI Service — только DeepSeek (OpenAI-совместимый API). TTS — через Google или отключено."""
+import asyncio
+import os
 from openai import AsyncOpenAI
 from typing import Optional, List, Dict, Any
 import io
@@ -12,7 +14,15 @@ class AIService:
     """Сервис для DeepSeek API (чат-модели). TTS не используется — только Google в core."""
 
     def __init__(self):
-        api_key = settings.deepseek_api_key
+        self.provider = "deepseek"
+        api_key = (
+            (settings.deepseek_api_key or os.environ.get("DEEPSEEK_API_KEY") or "")
+            .strip()
+        )
+        if not api_key:
+            raise ValueError(
+                "DEEPSEEK_API_KEY пустой. Добавьте в backend/.env: DEEPSEEK_API_KEY=sk-..."
+            )
         base_url = "https://api.deepseek.com"
         self.model_gpt = "deepseek-chat"
         print(f"[AI Service] Using DeepSeek API with model: {self.model_gpt}")
@@ -381,13 +391,24 @@ Transcript:
             # DeepSeek supports response_format according to their documentation
             api_params["response_format"] = {"type": "json_object"}
 
-            # Handle streaming vs non-streaming responses
-            if use_streaming:
-                print(f"[{self.provider.upper()}] Starting streaming request with model {self.model_gpt}")
-                response_text = await self._handle_streaming_response(api_params)
-            else:
-                response = await self.client.chat.completions.create(**api_params)
-                response_text = response.choices[0].message.content
+            # Handle streaming vs non-streaming responses (retry on connection error)
+            response_text = None
+            for attempt in range(3):
+                try:
+                    if use_streaming:
+                        print(f"[{self.provider.upper()}] Starting streaming request with model {self.model_gpt} (attempt {attempt + 1}/3)")
+                        response_text = await self._handle_streaming_response(api_params)
+                    else:
+                        response = await self.client.chat.completions.create(**api_params)
+                        response_text = response.choices[0].message.content
+                    break
+                except Exception as req_err:
+                    err_str = str(req_err).lower()
+                    if ("connection" in err_str or "connect" in err_str) and attempt < 2:
+                        print(f"[AI] Connection error (attempt {attempt + 1}/3), retrying in 2s: {req_err}")
+                        await asyncio.sleep(2)
+                        continue
+                    raise
             
             print(f"[{self.provider.upper()}] Response received, length: {len(response_text) if response_text else 0}")
             print(f"[{self.provider.upper()}] Response preview: {response_text[:200] if response_text else 'EMPTY'}...")
@@ -468,7 +489,10 @@ Transcript:
             print(f"[AI] Exception in generate_session_question_with_json_mode: {str(e)}")
             import traceback
             traceback.print_exc()
-            raise Exception(f"Error generating session question: {str(e)}")
+            hint = ""
+            if "connection" in str(e).lower() or "connect" in str(e).lower():
+                hint = " Проверьте DEEPSEEK_API_KEY в .env, интернет и доступность https://api.deepseek.com"
+            raise Exception(f"Error generating session question: {str(e)}.{hint}")
 
     async def _handle_streaming_response(self, api_params: dict) -> str:
         """
@@ -482,8 +506,8 @@ Transcript:
         """
         try:
             print(f"[{self.provider.upper()}] Starting streaming response handling")
-            # When stream=True, create() returns an async iterator directly
-            stream = self.client.chat.completions.create(**api_params)
+            # When stream=True, create() is async — await returns the async iterator
+            stream = await self.client.chat.completions.create(**api_params)
             
             accumulated_text = ""
             chunk_count = 0

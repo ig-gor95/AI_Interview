@@ -1,24 +1,29 @@
 """Application configuration"""
+from pathlib import Path
 from pydantic_settings import BaseSettings
 from typing import List
+
+# Путь к backend/.env — не зависит от текущей директории при запуске
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_ENV_FILE = _BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
     """Application settings"""
     
-    # Database
+    # Database — захардкожено под локальный Postgres
     database_url: str = "postgresql+asyncpg://postgres:1510261105@localhost:5432/ai_hr_db"
     postgres_user: str = "postgres"
     postgres_password: str = "1510261105"
     postgres_db: str = "ai_hr_db"
 
-    # AI Service — только DeepSeek
-    deepseek_api_key: str = ""  # задаётся в .env (DEEPSEEK_API_KEY), не коммитить
+    # AI Service — только DeepSeek (для локального запуска дефолт; в прод — DEEPSEEK_API_KEY в .env)
+    deepseek_api_key: str = "sk-29272cca69af437ea93d8fef2fb61d00"
 
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
     google_cloud_credentials_path: str = "majestic-camp-315514-943a8d82b2b5.json"  # Path to service account JSON file
-    google_cloud_voice_name: str = "ru-RU-Wavenet-A"  # Russian Wavenet voice
+    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Audio-001"  # Leda (Chirp3 HD)
     google_cloud_voice_language: str = "ru-RU"
     
     # Security
@@ -55,11 +60,16 @@ class Settings(BaseSettings):
         return [analyzer.strip() for analyzer in self.enabled_analyzers.split(",")]
     
     class Config:
-        # .env в backend/ (при запуске из backend/); DEEPSEEK_API_KEY — не коммитить
-        env_file = ".env"
+        # Всегда грузим backend/.env по абсолютному пути
+        env_file = str(_ENV_FILE)
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # игнорировать лишние переменные из .env (напр. OPENAI_API_KEY)
 
 
 settings = Settings()
+# Всегда использовать захардкоженный postgres/1510261105 (игнорировать DATABASE_URL из .env)
+settings.database_url = "postgresql+asyncpg://postgres:1510261105@localhost:5432/ai_hr_db"
+settings.postgres_user = "postgres"
+settings.postgres_password = "1510261105"
 

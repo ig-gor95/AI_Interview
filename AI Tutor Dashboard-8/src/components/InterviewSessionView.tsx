@@ -30,8 +30,14 @@ interface WebSocketMessage {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 // For WebSocket, use relative path - Vite proxy will handle it
-// This ensures consistent proxy behavior for both directions
 const WS_BASE_URL = import.meta.env.VITE_WS_URL || '/ws';
+
+function fullAudioUrl(relativeOrAbsolute: string | undefined): string | undefined {
+  if (!relativeOrAbsolute) return undefined;
+  if (relativeOrAbsolute.startsWith('http://') || relativeOrAbsolute.startsWith('https://')) return relativeOrAbsolute;
+  const base = typeof API_BASE_URL === 'string' && API_BASE_URL.startsWith('http') ? API_BASE_URL.replace(/\/$/, '').replace(/\/api\/?$/, '') : window.location.origin;
+  return base + (relativeOrAbsolute.startsWith('/') ? relativeOrAbsolute : '/' + relativeOrAbsolute);
+}
 
 export function InterviewSessionView() {
   const { token } = useParams<{ token: string }>();
@@ -317,11 +323,12 @@ export function InterviewSessionView() {
           stopTimer();
 
           const fullText = data.message || '';
+          const audioUrlResolved = fullAudioUrl(data.audio_url) ?? data.audio_url;
           const newMessage: TranscriptMessage = {
             role: 'ai',
             message: fullText,
             timestamp: data.timestamp || new Date().toISOString(),
-            audioUrl: data.audio_url
+            audioUrl: audioUrlResolved
           };
 
           setTranscript(prev => [...prev, newMessage]);
@@ -353,57 +360,42 @@ export function InterviewSessionView() {
           };
 
           if (newMessage.audioUrl) {
-            const audio = new Audio(newMessage.audioUrl);
+            const audioSrc = newMessage.audioUrl;
+            if (typeof window !== 'undefined' && !audioSrc.startsWith('http')) {
+              console.warn('[Frontend] Audio URL relative, full URL:', (window.location.origin + (audioSrc.startsWith('/') ? '' : '/') + audioSrc));
+            }
+            const audio = new Audio(audioSrc);
 
-            audio.onloadedmetadata = () => {
-              const durationSec = audio.duration;
-              startTypewriter(durationSec);
-              audio.play().catch(() => {
-                if (typewriterIntervalRef.current) {
-                  clearInterval(typewriterIntervalRef.current);
-                  typewriterIntervalRef.current = null;
-                }
-                startTypewriter(fullText.length / 18);
-                const fallbackMs = Math.max(3000, (fullText.length / 18) * 1000);
-                setTimeout(() => {
-                  if (typewriterIntervalRef.current) {
-                    clearInterval(typewriterIntervalRef.current);
-                    typewriterIntervalRef.current = null;
-                  }
-                  setVisibleCharCount(fullText.length);
-                  setTypingMessageTimestamp(null);
-                  setIsSpeaking(false);
-                  isUserTurnRef.current = true;
-                  startTimer();
-                }, fallbackMs);
-              });
-            };
-            audio.load();
-
-            audio.onended = () => {
-              setVisibleCharCount(fullText.length);
-              setTypingMessageTimestamp(null);
+            const enableMicAndCleanup = () => {
               if (typewriterIntervalRef.current) {
                 clearInterval(typewriterIntervalRef.current);
                 typewriterIntervalRef.current = null;
               }
+              setVisibleCharCount(fullText.length);
+              setTypingMessageTimestamp(null);
               setIsSpeaking(false);
               isUserTurnRef.current = true;
               startTimer();
             };
 
-            audio.onerror = () => {
-              if (typewriterIntervalRef.current) {
-                clearInterval(typewriterIntervalRef.current);
-                typewriterIntervalRef.current = null;
-              }
-              setVisibleCharCount(fullText.length);
-              setTypingMessageTimestamp(null);
-              setTimeout(() => {
-                setIsSpeaking(false);
-                isUserTurnRef.current = true;
-                startTimer();
-              }, 2000);
+            audio.onloadedmetadata = () => {
+              const durationSec = audio.duration;
+              startTypewriter(durationSec);
+              audio.play().catch((err) => {
+                console.warn('[Frontend] Audio play failed (autoplay?), enabling mic:', err);
+                enableMicAndCleanup();
+                startTypewriter(fullText.length / 18);
+                const fallbackMs = Math.max(500, (fullText.length / 18) * 1000);
+                setTimeout(enableMicAndCleanup, fallbackMs);
+              });
+            };
+            audio.load();
+
+            audio.onended = enableMicAndCleanup;
+
+            audio.onerror = (e) => {
+              console.warn('[Frontend] Audio load/play error:', e);
+              enableMicAndCleanup();
             };
           } else {
             startTypewriter(fullText.length / 18);
@@ -739,12 +731,19 @@ export function InterviewSessionView() {
 
       recognition.onend = () => {
         console.log('[Frontend] Speech recognition ended');
-        // Manual-only: do not send. Only update UI. User must press stop to send.
         if (speechPauseTimeoutRef.current) {
           clearTimeout(speechPauseTimeoutRef.current);
           speechPauseTimeoutRef.current = null;
         }
         setIsListening(false);
+        // Если есть накопленный текст — отправить, чтобы диалог продолжался без повторного нажатия
+        const text = finalTranscriptRef.current.trim();
+        if (text && wsRef.current?.readyState === WebSocket.OPEN) {
+          console.log('[Frontend] Auto-sending on recognition end:', text);
+          sendTextMessage(text);
+          finalTranscriptRef.current = '';
+          setInterimTranscript('');
+        }
       };
 
       recognition.onerror = (event) => {
