@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal
@@ -716,13 +716,31 @@ async def _process_user_response(
     last_ai_message = result.scalar_one_or_none()
     last_question_text = last_ai_message.message_text if last_ai_message else "Приветствие"
     
+    # Симуляция считается завершённой, если в диалоге уже есть хотя бы 1 реплика AI и 1 реплика user
+    simulation_done = False
+    if session_state.get("simulation_active", False):
+        result = await db.execute(
+            select(SimulationScenario).where(SimulationScenario.session_id == session.id)
+        )
+        scenario = result.scalar_one_or_none()
+        if scenario:
+            result = await db.execute(
+                select(SimulationDialog.role, func.count(SimulationDialog.id).label("cnt"))
+                .where(SimulationDialog.scenario_id == scenario.id)
+                .group_by(SimulationDialog.role)
+            )
+            counts = {row[0]: row[1] for row in result.fetchall()}
+            simulation_done = counts.get("ai", 0) >= 1 and counts.get("user", 0) >= 1
+            if simulation_done:
+                print(f"[_process_user_response] simulation_done=True (ai={counts.get('ai',0)}, user={counts.get('user',0)})")
+    
     # Проверяем, есть ли ожидающий вопрос из шаблона после динамического вопроса
     pending_template_question = session_state.get("pending_template_question")
     if pending_template_question:
         # Пользователь ответил на динамический вопрос, теперь задаем вопрос из шаблона
         session_state.pop("pending_template_question", None)
         # Используем сохраненный вопрос из шаблона
-        context = await _build_gpt_context(session, interview, db, user_response_text=user_text)
+        context = await _build_gpt_context(session, interview, db, user_response_text=user_text, simulation_done=simulation_done)
         # Принудительно устанавливаем текущий вопрос из шаблона
         context.current_interview_question = pending_template_question
         # Обновляем индекс вопроса
@@ -741,7 +759,7 @@ async def _process_user_response(
             session_state["last_question_qa_id"] = qa.id
         
         # Build GPT context with user response
-        context = await _build_gpt_context(session, interview, db, user_response_text=user_text)
+        context = await _build_gpt_context(session, interview, db, user_response_text=user_text, simulation_done=simulation_done)
     
     # Generate next question using structured GPT API
     gpt_response = await openai_service.generate_session_question_structured(context)
@@ -947,7 +965,8 @@ async def _build_gpt_context(
     session: Session,
     interview: Interview,
     db: AsyncSession,
-    user_response_text: Optional[str] = None
+    user_response_text: Optional[str] = None,
+    simulation_done: bool = False
 ) -> GPTContextRequest:
     """Build GPT context request from session and interview"""
     
@@ -1074,7 +1093,8 @@ async def _build_gpt_context(
         conversation_history=conversation_history,
         question_progress=question_progress,
         session_history=session_history_list,
-        allow_dynamic_questions=interview.config.allow_dynamic_questions if interview.config else False
+        allow_dynamic_questions=interview.config.allow_dynamic_questions if interview.config else False,
+        simulation_done=simulation_done
     )
     
     return context

@@ -155,6 +155,7 @@ class GPTContextRequest(BaseModel):
     question_progress: QuestionProgress = Field(alias="questionProgress")
     session_history: List[SessionQuestionAnswerSummary] = Field(alias="sessionHistory")
     allow_dynamic_questions: bool = Field(alias="allowDynamicQuestions", default=False)
+    simulation_done: bool = Field(alias="simulationDone", default=False)
     
     class Config:
         populate_by_name = True
