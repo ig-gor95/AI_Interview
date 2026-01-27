@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
     google_cloud_credentials_path: str = "majestic-camp-315514-943a8d82b2b5.json"  # Path to service account JSON file
-    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Audio-001"  # Leda (Chirp3 HD)
+    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Leda"  # Leda (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
     google_cloud_voice_language: str = "ru-RU"
     
     # Security

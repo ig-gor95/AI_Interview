@@ -8,7 +8,7 @@ from google.cloud import texttospeech
 class GoogleCloudTTSService:
     """Service for Google Cloud Text-to-Speech with Russian voices"""
 
-    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Chirp3-HD-Audio-001", language_code: str = "ru-RU"):
+    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Chirp3-HD-Leda", language_code: str = "ru-RU"):
         # Set credentials path if provided
         if credentials_path:
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
@@ -55,7 +55,7 @@ class GoogleCloudTTSService:
             # Set the text input
             synthesis_input = texttospeech.SynthesisInput(text=text)
 
-            # Build the voice request (Leda / Chirp3 HD)
+            # Build the voice request (Leda — Chirp3 HD female voice)
             voice = texttospeech.VoiceSelectionParams(
                 language_code=language_code,
                 name=voice_name,
