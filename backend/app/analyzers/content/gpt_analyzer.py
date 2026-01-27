@@ -1,13 +1,13 @@
 """GPT-4 based content analyzer"""
 from typing import Dict, List, Any, Optional
 from app.analyzers.base import BaseAnalyzer, AnalysisResult
-from app.services.openai_service import OpenAIService
+from app.services.openai_service import AIService
 
 
 class GPTContentAnalyzer(BaseAnalyzer):
     """Analyzer using GPT-4 for content analysis"""
     
-    def __init__(self, openai_client: Optional[OpenAIService] = None):
+    def __init__(self, openai_client: Optional[AIService] = None):
         self.openai_service = openai_client
     
     @property
@@ -20,7 +20,7 @@ class GPTContentAnalyzer(BaseAnalyzer):
     
     @property
     def description(self) -> str:
-        return "Analyzes interview content using GPT-4"
+        return "Analyzes interview content using AI (DeepSeek)"
     
     async def analyze(
         self,
@@ -29,17 +29,17 @@ class GPTContentAnalyzer(BaseAnalyzer):
         metadata: Dict[str, Any]
     ) -> AnalysisResult:
         """
-        Analyze interview content using GPT-4
-        
-        Uses OpenAI service to analyze transcript and extract insights
+        Analyze interview content using AI (DeepSeek)
+
+        Uses AI service to analyze transcript and extract insights
         """
         if not self.openai_service:
-            # Fallback if OpenAI service not available
+            # Fallback if AI service not available
             return AnalysisResult(
                 analyzer_name=self.name,
                 score=0.0,
-                details={"error": "OpenAI service not available"},
-                recommendations=["OpenAI service configuration required"],
+                details={"error": "AI service not available"},
+                recommendations=["AI service configuration required"],
                 metadata={}
             )
         
@@ -54,7 +54,7 @@ class GPTContentAnalyzer(BaseAnalyzer):
                 "evaluation_criteria": evaluation_criteria,
             }
             
-            # Analyze transcript using OpenAI service
+            # Analyze transcript using AI service
             analysis_result = await self.openai_service.analyze_transcript(
                 transcript=transcript,
                 session_params=session_params,
@@ -95,7 +95,7 @@ class GPTContentAnalyzer(BaseAnalyzer):
                     "Review interview transcript for detailed insights"
                 ],
                 metadata={
-                    "model_used": "gpt-4",
+                    "model_used": "ai-service",
                     "analyzer_version": self.version,
                     "recommendation": analysis_result.get("recommendation", ""),
                 }

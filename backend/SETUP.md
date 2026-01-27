@@ -4,7 +4,23 @@
 
 ### 1. Настройка окружения
 
-Файл `.env` уже создан с вашим OpenAI API ключом. Убедитесь, что все переменные настроены правильно.
+Файл `.env` **не коммитится** в репозиторий. Создайте его в каталоге `backend/`:
+
+```bash
+cd backend
+cp env.example .env
+# Отредактируйте .env и подставьте свой DEEPSEEK_API_KEY
+```
+
+Убедитесь, что все переменные в `.env` настроены правильно.
+
+**AI:** используется только **DeepSeek**. В `.env` задайте:
+
+```bash
+DEEPSEEK_API_KEY=ваш_deepseek_ключ
+```
+
+Ключ можно получить на [platform.deepseek.com](https://platform.deepseek.com)
 
 ### 2. Запуск через Docker
 
@@ -43,7 +59,7 @@ docker-compose exec backend alembic upgrade head
 
 Важные переменные в `.env`:
 
-- `OPENAI_API_KEY` - уже настроен ✅
+- `DEEPSEEK_API_KEY` - ключ DeepSeek (обязательно для AI)
 - `DATABASE_URL` - для подключения к PostgreSQL
 - `SECRET_KEY` - для JWT токенов (измените в production!)
 - `CORS_ORIGINS` - разрешенные origins для фронтенда

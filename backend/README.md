@@ -12,6 +12,16 @@ Backend API for AI-powered HR interview system with live voice dialog and candid
 - 🔐 JWT authentication
 - 📝 Comprehensive candidate evaluation reports
 
+## AI
+
+Используется только **DeepSeek**. В `.env` задайте:
+
+```bash
+DEEPSEEK_API_KEY=your_deepseek_key_here
+```
+
+Ключ: [platform.deepseek.com](https://platform.deepseek.com)
+
 ## Architecture
 
 The project follows Clean Architecture principles with modular analyzer system:
@@ -26,7 +36,7 @@ The project follows Clean Architecture principles with modular analyzer system:
 ### Prerequisites
 
 - Docker and Docker Compose
-- OpenAI API key
+- DeepSeek API key
 
 ### Setup
 
@@ -37,8 +47,8 @@ cd backend
 
 2. Copy environment variables:
 ```bash
-cp .env.example .env
-# Edit .env and set your OPENAI_API_KEY and other variables
+cp env.example .env
+# Edit .env and set DEEPSEEK_API_KEY
 ```
 
 3. Start services:

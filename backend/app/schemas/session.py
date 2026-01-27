@@ -87,6 +87,7 @@ class InterviewContext(BaseModel):
     duration: int
     instructions: Optional[str] = None
     allow_dynamic_questions: bool = Field(alias="allowDynamicQuestions", default=False)
+    customer_simulation: Optional[CustomerSimulation] = Field(None, alias="customerSimulation")
     
     class Config:
         populate_by_name = True

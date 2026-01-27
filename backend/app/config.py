@@ -7,16 +7,22 @@ class Settings(BaseSettings):
     """Application settings"""
     
     # Database
-    database_url: str
-    postgres_user: str
-    postgres_password: str
-    postgres_db: str
-    
-    # OpenAI
-    openai_api_key: str
+    database_url: str = "postgresql+asyncpg://postgres:1510261105@localhost:5432/ai_hr_db"
+    postgres_user: str = "postgres"
+    postgres_password: str = "1510261105"
+    postgres_db: str = "ai_hr_db"
+
+    # AI Service — только DeepSeek
+    deepseek_api_key: str = ""  # задаётся в .env (DEEPSEEK_API_KEY), не коммитить
+
+    # TTS — только Google или отключено
+    tts_service: str = "google"  # "google" или "none"
+    google_cloud_credentials_path: str = "majestic-camp-315514-943a8d82b2b5.json"  # Path to service account JSON file
+    google_cloud_voice_name: str = "ru-RU-Wavenet-A"  # Russian Wavenet voice
+    google_cloud_voice_language: str = "ru-RU"
     
     # Security
-    secret_key: str
+    secret_key: str = "test-secret-key"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
@@ -28,7 +34,7 @@ class Settings(BaseSettings):
     debug: bool = True
     
     # File Storage
-    audio_storage_path: str = "/app/audio_files"
+    audio_storage_path: str = "./audio_files"
     max_audio_size_mb: int = 50
     
     # Analyzers
@@ -49,7 +55,9 @@ class Settings(BaseSettings):
         return [analyzer.strip() for analyzer in self.enabled_analyzers.split(",")]
     
     class Config:
+        # .env в backend/ (при запуске из backend/); DEEPSEEK_API_KEY — не коммитить
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = False
 
 

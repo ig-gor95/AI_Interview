@@ -29,7 +29,9 @@ interface WebSocketMessage {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || (API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://'));
+// For WebSocket, use relative path - Vite proxy will handle it
+// This ensures consistent proxy behavior for both directions
+const WS_BASE_URL = import.meta.env.VITE_WS_URL || '/ws';
 
 export function InterviewSessionView() {
   const { token } = useParams<{ token: string }>();
@@ -52,13 +54,21 @@ export function InterviewSessionView() {
   const [timeExpired, setTimeExpired] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [typingMessageTimestamp, setTypingMessageTimestamp] = useState<string | null>(null);
+  const [visibleCharCount, setVisibleCharCount] = useState(0);
+
   const wsRef = useRef<WebSocket | null>(null);
+  const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finalTranscriptRef = useRef('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUserTurnRef = useRef(false); // Таймер работает только когда пользователь должен отвечать
   const sessionDurationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  const wsConnectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const speechPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load session on mount
   useEffect(() => {
@@ -94,16 +104,19 @@ export function InterviewSessionView() {
         // Always connect to WebSocket
         connectWebSocket(response.sessionId);
         
-        if (response.isResume && response.transcript.length > 0) {
-          setTranscript(response.transcript);
-          setShowResumeDialog(true);
-          
-          // Determine if it's user's turn based on last message
-          const lastMessage = response.transcript[response.transcript.length - 1];
-          if (lastMessage && lastMessage.role === 'ai') {
-            // Last message is from AI, so user should respond
-            isUserTurnRef.current = true;
+        if (response.isResume) {
+          // Resumed session - show dialog or auto-resume
+          if (response.transcript.length > 0) {
+            setTranscript(response.transcript);
+            // Determine if it's user's turn based on last message
+            const lastMessage = response.transcript[response.transcript.length - 1];
+            if (lastMessage && lastMessage.role === 'ai') {
+              // Last message is from AI, so user should respond
+              isUserTurnRef.current = true;
+            }
           }
+          // Show resume dialog (will be auto-closed when WebSocket sends 'resume' message)
+          setShowResumeDialog(true);
         }
       } catch (error) {
         console.error('Ошибка при загрузке сессии:', error);
@@ -119,37 +132,145 @@ export function InterviewSessionView() {
   // Connect to WebSocket
   const connectWebSocket = (sid: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connected');
       return; // Already connected
     }
 
-    const wsUrl = `${WS_BASE_URL}/ws/session/${sid}?candidate_name=Гость`;
+    // Build WebSocket URL - use Vite proxy for consistent routing
+    // Vite proxy maps /ws/* to ws://localhost:8000/ws/*
+    let wsUrl: string;
+    if (WS_BASE_URL.startsWith('ws://') || WS_BASE_URL.startsWith('wss://')) {
+      // Absolute WebSocket URL (if explicitly set)
+      wsUrl = `${WS_BASE_URL}/ws/session/${sid}?candidate_name=Гость`;
+    } else {
+      // Use relative path - browser will use current protocol and host
+      // Vite dev server will proxy /ws/* to ws://localhost:8000/ws/*
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}${WS_BASE_URL}/session/${sid}?candidate_name=Гость`;
+    }
+
+    console.log('[Frontend] Connecting to WebSocket:', wsUrl);
+
+    console.log('Connecting to WebSocket:', wsUrl);
     const ws = new WebSocket(wsUrl);
+    
+    // Set timeout for connection (10 seconds)
+    wsConnectionTimeoutRef.current = setTimeout(() => {
+      if (ws.readyState !== WebSocket.OPEN) {
+        console.error('WebSocket connection timeout');
+        setError('Таймаут подключения к серверу. Проверьте, что backend запущен и доступен.');
+        ws.close();
+      }
+    }, 10000);
 
     ws.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('WebSocket connected successfully');
       setIsConnected(true);
+      setError(null); // Clear any connection errors
+      
+      // Clear connection timeout
+      if (wsConnectionTimeoutRef.current) {
+        clearTimeout(wsConnectionTimeoutRef.current);
+        wsConnectionTimeoutRef.current = null;
+      }
+      
+      // If this is a resumed session, WebSocket will send 'resume' message
+      // If it's a new session, wait for user to click "Войти в интервью"
     };
 
     ws.onmessage = (event) => {
       try {
         const data: WebSocketMessage = JSON.parse(event.data);
+        console.log('WebSocket message received:', data.type, data);
         handleWebSocketMessage(data);
       } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
+        console.error('Error parsing WebSocket message:', error, event.data);
       }
     };
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setError('Ошибка подключения к серверу');
+      console.error('[Frontend] WebSocket error event:', error);
+      console.error('[Frontend] WebSocket error details:', {
+        type: error.type,
+        target: error.target,
+        currentTarget: error.currentTarget,
+        wsState: ws.readyState
+      });
+      
+      // Check if this is a send error or connection error
+      if (ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        setError('WebSocket соединение закрыто. Попробуйте переподключиться.');
+      } else {
+        setError('Ошибка WebSocket соединения. Проверьте, что backend запущен и доступен.');
+      }
+      
+      // Clear connection timeout
+      if (wsConnectionTimeoutRef.current) {
+        clearTimeout(wsConnectionTimeoutRef.current);
+        wsConnectionTimeoutRef.current = null;
+      }
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.log('[Frontend] WebSocket disconnected', {
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean
+      });
       setIsConnected(false);
+
+      // Clear connection timeout
+      if (wsConnectionTimeoutRef.current) {
+        clearTimeout(wsConnectionTimeoutRef.current);
+        wsConnectionTimeoutRef.current = null;
+      }
+
+      // Attempt reconnection for unexpected disconnections
+      if (event.code !== 1000 && event.code !== 1001 && event.code !== 1005) {
+        // Not a normal closure, going away, or empty close
+        console.log('[Frontend] Attempting WebSocket reconnection in 3 seconds...');
+        setIsReconnecting(true);
+        setError('Соединение потеряно. Попытка переподключения...');
+
+        // Attempt reconnection after 3 seconds
+        setTimeout(() => {
+          if (!isConnected && sessionId) { // Only reconnect if still not connected and we have sessionId
+            console.log('[Frontend] Reconnecting WebSocket...');
+            connectWebSocket(sessionId);
+          }
+          setIsReconnecting(false);
+        }, 3000);
+      } else {
+        // Normal closure or empty close - don't attempt reconnection
+        if (!error) { // Only set error if not already set
+          const errorMsg = `Соединение закрыто: ${event.reason || `Код: ${event.code}`}`;
+          console.error('[Frontend]', errorMsg);
+          setError(errorMsg);
+        }
+      }
     };
 
     wsRef.current = ws;
+  };
+
+  // Manual reconnect function
+  const reconnectWebSocket = () => {
+    if (sessionId && !isReconnecting) {
+      console.log('[Frontend] Manual WebSocket reconnection requested');
+      setIsReconnecting(true);
+      setError('Переподключение...');
+
+      // Close existing connection if any
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+
+      // Attempt reconnection after a short delay
+      setTimeout(() => {
+        connectWebSocket(sessionId);
+        setIsReconnecting(false);
+      }, 1000);
+    }
   };
 
   // Handle WebSocket messages
@@ -157,46 +278,180 @@ export function InterviewSessionView() {
     switch (data.type) {
       case 'connected':
         console.log('Connected to session');
+        // If it's a resumed session, we'll get 'resume' message next
+        // If it's a new session, wait for user to click start
         break;
       
       case 'resume':
-        // Session resumed - transcript already loaded from startSession
+        // Session resumed - WebSocket sent resume message with transcript
+        console.log('[Frontend] Resume message received, transcript length:', data.transcript?.length || 0);
         setShowResumeDialog(false);
         setSessionStarted(true);
+        
         if (data.transcript && data.transcript.length > 0) {
+          console.log('[Frontend] Loading transcript history');
           setTranscript(data.transcript);
+          // Determine if it's user's turn based on last message
+          const lastMessage = data.transcript[data.transcript.length - 1];
+          if (lastMessage && lastMessage.role === 'ai') {
+            isUserTurnRef.current = true;
+            // Start timer if it's user's turn
+            if (timeRemaining !== null && timeRemaining > 0 && !timeExpired) {
+              startTimer();
+            }
+          }
+        } else {
+          // Empty transcript but resumed - session just started
+          // Wait for greeting message from AI (will come as 'message' type)
+          console.log('[Frontend] Empty transcript, waiting for greeting from AI...');
+          // Session is already started, just waiting for AI to send greeting
         }
-        // Timer will be managed based on user turn
         break;
       
       case 'message':
+        console.log('[Frontend] Message received:', data.role, data.message?.substring(0, 50));
         if (data.role === 'ai') {
           setIsSpeaking(true);
           setIsProcessing(false);
-          isUserTurnRef.current = false; // AI говорит - останавливаем таймер
+          isUserTurnRef.current = false;
           stopTimer();
-          
+
+          const fullText = data.message || '';
           const newMessage: TranscriptMessage = {
             role: 'ai',
-            message: data.message || '',
+            message: fullText,
             timestamp: data.timestamp || new Date().toISOString(),
             audioUrl: data.audio_url
           };
-          
+
           setTranscript(prev => [...prev, newMessage]);
-          
-          // После того как AI закончил говорить, запускаем таймер
-          // Предполагаем, что AI говорит ~3 секунды (можно улучшить, слушая audioUrl)
-          setTimeout(() => {
-            setIsSpeaking(false);
-            isUserTurnRef.current = true; // Теперь пользователь должен отвечать
-            startTimer();
-          }, 3000);
+          setTypingMessageTimestamp(newMessage.timestamp);
+          setVisibleCharCount(0);
+
+          if (typewriterIntervalRef.current) {
+            clearInterval(typewriterIntervalRef.current);
+            typewriterIntervalRef.current = null;
+          }
+
+          const startTypewriter = (durationSec: number) => {
+            const intervalMs = 50;
+            const steps = Math.ceil((durationSec * 1000) / intervalMs);
+            const step = steps > 0 ? Math.ceil(fullText.length / steps) : fullText.length;
+            let n = 0;
+            typewriterIntervalRef.current = setInterval(() => {
+              n += step;
+              setVisibleCharCount(c => {
+                const next = Math.min(fullText.length, c + step);
+                if (next >= fullText.length && typewriterIntervalRef.current) {
+                  clearInterval(typewriterIntervalRef.current);
+                  typewriterIntervalRef.current = null;
+                  setTypingMessageTimestamp(null);
+                }
+                return next;
+              });
+            }, intervalMs);
+          };
+
+          if (newMessage.audioUrl) {
+            const audio = new Audio(newMessage.audioUrl);
+
+            audio.onloadedmetadata = () => {
+              const durationSec = audio.duration;
+              startTypewriter(durationSec);
+              audio.play().catch(() => {
+                if (typewriterIntervalRef.current) {
+                  clearInterval(typewriterIntervalRef.current);
+                  typewriterIntervalRef.current = null;
+                }
+                startTypewriter(fullText.length / 18);
+                const fallbackMs = Math.max(3000, (fullText.length / 18) * 1000);
+                setTimeout(() => {
+                  if (typewriterIntervalRef.current) {
+                    clearInterval(typewriterIntervalRef.current);
+                    typewriterIntervalRef.current = null;
+                  }
+                  setVisibleCharCount(fullText.length);
+                  setTypingMessageTimestamp(null);
+                  setIsSpeaking(false);
+                  isUserTurnRef.current = true;
+                  startTimer();
+                }, fallbackMs);
+              });
+            };
+            audio.load();
+
+            audio.onended = () => {
+              setVisibleCharCount(fullText.length);
+              setTypingMessageTimestamp(null);
+              if (typewriterIntervalRef.current) {
+                clearInterval(typewriterIntervalRef.current);
+                typewriterIntervalRef.current = null;
+              }
+              setIsSpeaking(false);
+              isUserTurnRef.current = true;
+              startTimer();
+            };
+
+            audio.onerror = () => {
+              if (typewriterIntervalRef.current) {
+                clearInterval(typewriterIntervalRef.current);
+                typewriterIntervalRef.current = null;
+              }
+              setVisibleCharCount(fullText.length);
+              setTypingMessageTimestamp(null);
+              setTimeout(() => {
+                setIsSpeaking(false);
+                isUserTurnRef.current = true;
+                startTimer();
+              }, 2000);
+            };
+          } else {
+            startTypewriter(fullText.length / 18);
+            setTimeout(() => {
+              if (typewriterIntervalRef.current) {
+                clearInterval(typewriterIntervalRef.current);
+                typewriterIntervalRef.current = null;
+              }
+              setVisibleCharCount(fullText.length);
+              setTypingMessageTimestamp(null);
+              setIsSpeaking(false);
+              isUserTurnRef.current = true;
+              startTimer();
+            }, (fullText.length / 18) * 1000 + 200);
+          }
         }
         break;
       
+      case 'audio_received':
+        // Backend confirmed that audio was received
+        console.log('[Frontend] Backend confirmed audio received:', data.message);
+        setIsProcessing(true);
+        break;
+      
       case 'transcription':
-        // User message transcription confirmed
+        // User message transcription confirmed - add to transcript
+        console.log('[Frontend] Transcription received:', data.message);
+        if (data.message) {
+          const userMessage: TranscriptMessage = {
+            role: 'user',
+            message: data.message,
+            timestamp: data.timestamp || new Date().toISOString()
+          };
+          setTranscript(prev => {
+            // Check if message already exists (avoid duplicates)
+            const exists = prev.some(msg => 
+              msg.role === 'user' && 
+              msg.message === data.message && 
+              Math.abs(new Date(msg.timestamp).getTime() - new Date(userMessage.timestamp).getTime()) < 5000
+            );
+            if (exists) {
+              console.log('[Frontend] Message already in transcript, skipping');
+              return prev;
+            }
+            console.log('[Frontend] Adding user message to transcript');
+            return [...prev, userMessage];
+          });
+        }
         setIsProcessing(true);
         break;
       
@@ -257,6 +512,38 @@ export function InterviewSessionView() {
 
   // Start session
   const handleStartSession = () => {
+    if (!sessionId) {
+      setError('Сессия не загружена. Попробуйте обновить страницу.');
+      return;
+    }
+
+    // Если WebSocket не подключен, попробуем подключиться
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.log('WebSocket not connected, attempting to connect...');
+      connectWebSocket(sessionId);
+      
+      // Ждем подключения (максимум 5 секунд)
+      let attempts = 0;
+      const checkConnection = setInterval(() => {
+        attempts++;
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          clearInterval(checkConnection);
+          // WebSocket подключен, отправляем start
+          sendStartMessage();
+        } else if (attempts >= 10) {
+          // 5 секунд прошло (10 попыток по 500мс)
+          clearInterval(checkConnection);
+          setError('Не удалось подключиться к серверу. Проверьте, что backend запущен.');
+        }
+      }, 500);
+      
+      return;
+    }
+
+    sendStartMessage();
+  };
+
+  const sendStartMessage = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       setError('WebSocket не подключен');
       return;
@@ -264,9 +551,16 @@ export function InterviewSessionView() {
 
     setShowResumeDialog(false);
     setSessionStarted(true);
+    setError(null); // Clear any previous errors
     
     // Send start message
-    wsRef.current.send(JSON.stringify({ type: 'start' }));
+    try {
+      wsRef.current.send(JSON.stringify({ type: 'start' }));
+      console.log('Start message sent to WebSocket');
+    } catch (error) {
+      console.error('Error sending start message:', error);
+      setError('Ошибка при отправке команды начала сессии');
+    }
     
     // Timer will start when AI finishes speaking (in handleWebSocketMessage)
     // Duration and remaining time are already set from loadSession
@@ -277,48 +571,50 @@ export function InterviewSessionView() {
     if (!sessionId) return;
     
     // WebSocket should already be connected from loadSession
+    // Backend will send 'resume' message with transcript
+    // Just close the dialog, session will start when 'resume' message arrives
     setShowResumeDialog(false);
-    setSessionStarted(true);
     
-    // Timer is already initialized from loadSession
-    // Start timer if it's user's turn
-    if (isUserTurnRef.current && timeRemaining !== null && timeRemaining > 0 && !timeExpired) {
-      startTimer();
+    // If transcript is already loaded, start session immediately
+    if (transcript.length > 0) {
+      setSessionStarted(true);
+      const lastMessage = transcript[transcript.length - 1];
+      if (lastMessage && lastMessage.role === 'ai') {
+        isUserTurnRef.current = true;
+        if (timeRemaining !== null && timeRemaining > 0 && !timeExpired) {
+          startTimer();
+        }
+      }
     }
+    // Otherwise wait for 'resume' message from WebSocket
   };
 
-  // Send audio chunk
-  const sendAudioChunk = (audioData: ArrayBuffer) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      return;
-    }
-
-    // Convert ArrayBuffer to base64
-    const base64 = btoa(
-      String.fromCharCode(...new Uint8Array(audioData))
-    );
-
-    wsRef.current.send(JSON.stringify({
-      type: 'audio',
-      data: base64
-    }));
-  };
 
   // Send text message
   const sendTextMessage = (text: string) => {
+    if (!text || text.trim() === '') {
+      return; // Don't send empty messages
+    }
+
+    // Clear pause timeout
+    if (speechPauseTimeoutRef.current) {
+      clearTimeout(speechPauseTimeoutRef.current);
+      speechPauseTimeoutRef.current = null;
+    }
+
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       return;
     }
 
     wsRef.current.send(JSON.stringify({
       type: 'text',
-      text: text
+      text: text.trim()
     }));
 
     // Add user message to transcript
     const userMessage: TranscriptMessage = {
       role: 'user',
-      message: text,
+      message: text.trim(),
       timestamp: new Date().toISOString()
     };
     setTranscript(prev => [...prev, userMessage]);
@@ -328,59 +624,163 @@ export function InterviewSessionView() {
     stopTimer();
   };
 
-  // Toggle listening (microphone)
+  // Toggle listening (microphone) - using Web Speech API
   const toggleListening = () => {
-    if (isMuted || isProcessing || timeExpired) return;
+    if (isMuted || timeExpired) return;
 
-    if (!isListening) {
-      // Start recording
-      navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-          const mediaRecorder = new MediaRecorder(stream);
-          const audioChunks: Blob[] = [];
-
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              audioChunks.push(event.data);
-            }
-          };
-
-          mediaRecorder.onstop = () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            audioBlob.arrayBuffer().then(buffer => {
-              sendAudioChunk(buffer);
-              setIsListening(false);
-            });
-            
-            // Stop all tracks
-            stream.getTracks().forEach(track => track.stop());
-          };
-
-          mediaRecorder.start();
-          setIsListening(true);
-
-          // Store MediaRecorder reference for manual stop
-          (window as any).currentMediaRecorder = mediaRecorder;
-          
-          // Auto-stop after 30 seconds
-          setTimeout(() => {
-            if (mediaRecorder.state === 'recording') {
-              mediaRecorder.stop();
-            }
-          }, 30000);
-        })
-        .catch(error => {
-          console.error('Error accessing microphone:', error);
-          setError('Не удалось получить доступ к микрофону');
-        });
-    } else {
-      // Stop recording manually
-      const recorder = (window as any).currentMediaRecorder;
-      if (recorder && recorder.state === 'recording') {
-        recorder.stop();
+    if (isListening) {
+      // Stop recording: send accumulated text and stop recognition
+      const recognition = (window as any).currentSpeechRecognition;
+      if (recognition) {
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          console.log('[Frontend] Sending accumulated text (user stopped):', finalText);
+          sendTextMessage(finalText);
+          finalTranscriptRef.current = '';
+          setInterimTranscript('');
+        }
+        recognition.stop();
       }
       setIsListening(false);
+      return;
     }
+
+    // If we have pending text (recognition ended by itself earlier), send it on this click — never erase
+    const pending = finalTranscriptRef.current.trim();
+    if (pending) {
+      console.log('[Frontend] Sending pending text from previous session:', pending);
+      sendTextMessage(pending);
+      finalTranscriptRef.current = '';
+      setInterimTranscript('');
+      return;
+    }
+
+    // Not recording and no pending: block start when processing or not user's turn
+    if (isProcessing || (!isUserTurnRef.current && !timeExpired)) return;
+
+    // Check if Web Speech API is supported
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.error('[Frontend] Web Speech API not supported');
+      setError('Web Speech API не поддерживается в вашем браузере. Используйте Chrome или Edge.');
+      return;
+    }
+
+    // Create SpeechRecognition instance
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'ru-RU'; // Russian language for interviews
+
+    console.log('[Frontend] SpeechRecognition created:', {
+      continuous: recognition.continuous,
+      interimResults: recognition.interimResults,
+      lang: recognition.lang
+    });
+
+    // Reset final transcript for new session
+    finalTranscriptRef.current = '';
+
+      recognition.onstart = () => {
+        console.log('[Frontend] Speech recognition started');
+        setIsListening(true);
+        setInterimTranscript('');
+      };
+
+      recognition.onresult = (event) => {
+        let currentInterim = '';
+
+        // Reset pause timeout when we get new results (user is speaking)
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+
+        // Handle Web Speech API results structure
+        for (let i = event.resultIndex || 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result && result.length > 0 && result[0]) {
+            const transcript = result[0].transcript;
+            if (result.isFinal) {
+              finalTranscriptRef.current += transcript + ' ';
+              console.log('[Frontend] Final result added:', transcript);
+              console.log('[Frontend] Final transcript so far:', finalTranscriptRef.current.trim());
+
+              // Don't send immediately - wait for pause or manual stop
+              // This allows user to continue speaking across pauses
+            } else {
+              currentInterim += transcript;
+              console.log('[Frontend] Interim result:', transcript);
+            }
+          } else {
+            console.log('[Frontend] Result structure unexpected:', result);
+          }
+        }
+
+        // Update UI with interim text + accumulated final text
+        const accumulatedText = finalTranscriptRef.current.trim();
+        setInterimTranscript(accumulatedText ? `${accumulatedText} ${currentInterim}` : currentInterim);
+      };
+
+      recognition.onspeechend = () => {
+        console.log('[Frontend] Speech paused (not stopping recognition)');
+        // Manual-only: do not auto-send. Clear any lingering pause timeout.
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+        // User must press the button to finish and send.
+      };
+
+      recognition.onend = () => {
+        console.log('[Frontend] Speech recognition ended');
+        // Manual-only: do not send. Only update UI. User must press stop to send.
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('[Frontend] Speech recognition error:', event.error);
+        
+        // Clear pause timeout
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+
+        // Send any accumulated text before error
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          console.log('[Frontend] Sending accumulated text on error:', finalText);
+          sendTextMessage(finalText);
+          finalTranscriptRef.current = '';
+          setInterimTranscript('');
+        }
+
+        setError(`Ошибка распознавания речи: ${event.error}`);
+        setIsListening(false);
+      };
+
+      // Start recognition
+      try {
+        recognition.start();
+        console.log('[Frontend] Starting speech recognition...');
+
+        // Store recognition reference for manual stop
+        (window as any).currentSpeechRecognition = recognition;
+
+      } catch (error) {
+        console.error('[Frontend] Error starting speech recognition:', error);
+        setError('Ошибка запуска распознавания речи');
+      }
   };
 
   // End session
@@ -396,8 +796,21 @@ export function InterviewSessionView() {
   useEffect(() => {
     return () => {
       stopTimer();
+      if (wsConnectionTimeoutRef.current) {
+        clearTimeout(wsConnectionTimeoutRef.current);
+      }
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+      }
+      if (typewriterIntervalRef.current) {
+        clearInterval(typewriterIntervalRef.current);
+      }
       if (wsRef.current) {
         wsRef.current.close();
+      }
+      const recognition = (window as any).currentSpeechRecognition;
+      if (recognition) {
+        recognition.stop();
       }
     };
   }, []);
@@ -479,18 +892,40 @@ export function InterviewSessionView() {
               Интервью
             </h2>
             <p className="text-gray-600">
-              {isConnected ? 'Готово к началу' : 'Подключение...'}
+              {isConnected ? 'Готово к началу' : error ? 'Ошибка подключения' : 'Подключение...'}
             </p>
+            {error && (
+              <p className="text-red-600 text-sm mt-2">{error}</p>
+            )}
           </div>
 
           <button
             onClick={handleStartSession}
-            disabled={!isConnected}
+            disabled={!sessionId}
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Video className="w-5 h-5" />
             Войти в интервью
           </button>
+          
+          {!isConnected && !error && (
+            <p className="text-gray-500 text-sm mt-4 text-center">
+              {sessionId ? 'Подключение к серверу...' : 'Загрузка сессии...'}
+            </p>
+          )}
+          
+          {error && sessionId && (
+            <div className="mt-4">
+              <p className="text-red-600 text-sm text-center mb-2">{error}</p>
+              <button
+                onClick={reconnectWebSocket}
+                disabled={isReconnecting}
+                className="w-full py-2 text-blue-600 hover:text-blue-800 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {isReconnecting ? 'Переподключение...' : 'Переподключиться'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -505,6 +940,13 @@ export function InterviewSessionView() {
           <div className="flex items-center gap-2 sm:gap-6">
             {/* Timer */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 px-2 sm:px-4 py-1.5 sm:py-2 bg-gray-800/60 rounded-lg backdrop-blur-sm">
+              {/* Connection Status */}
+              <div className="flex items-center mr-1">
+                <div className={`w-2 h-2 rounded-full ${
+                  isConnected ? 'bg-green-400' : isReconnecting ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'
+                }`}></div>
+              </div>
+
               <div className="relative flex items-center">
                 <div className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full ${
                   isUserTurnRef.current ? 'bg-red-500 animate-pulse' : 'bg-green-500'
@@ -636,10 +1078,34 @@ export function InterviewSessionView() {
                       ? 'bg-blue-600/10 text-gray-100 border border-blue-500/20'
                       : 'bg-gray-800/80 text-gray-200 border border-gray-700/50'
                   }`}>
-                    {msg.message}
+                    {msg.role === 'ai' && msg.timestamp === typingMessageTimestamp
+                      ? msg.message.slice(0, visibleCharCount)
+                      : msg.message}
                   </div>
                 </div>
               ))}
+
+              {/* Interim transcript display */}
+              {interimTranscript && (
+                <div className="space-y-2 opacity-70">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold bg-gray-700 text-gray-200">
+                      В
+                    </div>
+                    <span className="text-xs font-semibold text-gray-300">Вы</span>
+                    <span className="text-xs text-gray-500">
+                      {new Date().toLocaleTimeString('ru-RU', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  <div className="text-sm leading-relaxed rounded-xl p-4 bg-gray-800/80 text-gray-400 border border-gray-700/50 italic">
+                    {interimTranscript}...
+                  </div>
+                </div>
+              )}
+
               <div ref={chatEndRef} />
             </div>
           </div>
@@ -675,11 +1141,11 @@ export function InterviewSessionView() {
           <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={toggleListening}
-              disabled={isMuted || isProcessing || (!isUserTurnRef.current && !timeExpired)}
+              disabled={isMuted || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
               className={`px-4 sm:px-8 py-2 sm:py-4 rounded-xl transition-all font-semibold ${
                 isListening
                   ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : isMuted || isProcessing || (!isUserTurnRef.current && !timeExpired)
+                  : isMuted || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))
                   ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
               }`}

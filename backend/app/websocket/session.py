@@ -1,6 +1,7 @@
 """WebSocket handler for live interview session dialog"""
 import json
 import uuid
+import base64
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException, status
@@ -12,8 +13,9 @@ from app.database import AsyncSessionLocal
 from app.models.session import Session, SessionStatus, SessionTranscript, SessionQuestionAnswer
 from app.models.interview import Interview, InterviewQuestion
 from app.models.simulation import SimulationScenario, SimulationDialog
-from app.services.openai_service import OpenAIService
+from app.services.openai_service import AIService
 from app.services.audio_service import AudioService
+from app.core import tts_service
 from app.services.session_service import (
     save_session_question_answer,
     get_session_question_answer_summaries
@@ -63,25 +65,62 @@ class SessionWebSocketManager:
     
     async def send_message(self, session_id: str, message: Dict[str, Any]):
         """Send message to client"""
-        if session_id in self.active_connections:
-            try:
-                await self.active_connections[session_id].send_json(message)
-            except Exception as e:
-                print(f"Error sending message to {session_id}: {e}")
+        if session_id not in self.active_connections:
+            print(f"[WebSocket] Warning: No active connection for session {session_id}")
+            print(f"[WebSocket] Active connections: {list(self.active_connections.keys())}")
+            return
+        
+        # Check if connection is still open
+        websocket = self.active_connections[session_id]
+        if websocket.client_state.name not in ["CONNECTED"]:
+            print(f"[WebSocket] Warning: Connection for session {session_id} is not in CONNECTED state: {websocket.client_state.name}")
+            # Remove stale connection
+            self.disconnect(session_id)
+            return
+        
+        try:
+            print(f"[WebSocket] Sending message to session {session_id}: type={message.get('type')}, role={message.get('role')}")
+            await websocket.send_json(message)
+            print(f"[WebSocket] Message sent successfully to session {session_id}")
+        except Exception as e:
+            print(f"[WebSocket] Error sending message to {session_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Only disconnect if it's a connection error, not a send error
+            # This prevents closing connection on transient errors
+            if "closed" in str(e).lower() or "disconnect" in str(e).lower():
+                print(f"[WebSocket] Connection appears closed, disconnecting session {session_id}")
                 self.disconnect(session_id)
     
     async def receive_message(self, session_id: str) -> Dict[str, Any]:
         """Receive message from client"""
         if session_id not in self.active_connections:
             raise ValueError("No active connection")
-        
+
+        print(f"[WebSocket] receive_message called for session {session_id}")
         data = await self.active_connections[session_id].receive()
-        
+        print(f"[WebSocket] Raw received data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+
         if "text" in data:
-            return json.loads(data["text"])
+            text_data = data["text"]
+            print(f"[WebSocket] Received text message, length: {len(text_data)}, first 200 chars: {text_data[:200]}...")
+            try:
+                parsed = json.loads(text_data)
+                print(f"[WebSocket] JSON parsed successfully, type: {parsed.get('type')}, keys: {list(parsed.keys())}")
+                return parsed
+            except json.JSONDecodeError as e:
+                print(f"[WebSocket] ERROR: Failed to parse JSON: {e}")
+                print(f"[WebSocket] Raw text: {text_data}")
+                return {"type": "unknown", "raw_text": text_data}
         elif "bytes" in data:
-            return {"type": "audio", "data": data["bytes"]}
+            bytes_data = data["bytes"]
+            print(f"[WebSocket] Received binary message, size: {len(bytes_data)} bytes")
+            return {"type": "audio", "data": bytes_data}
         else:
+            print(f"[WebSocket] Received unknown message format, keys: {list(data.keys())}")
+            for key, value in data.items():
+                if key != "text" and key != "bytes":  # Don't log large data
+                    print(f"[WebSocket]   {key}: {type(value)} - {str(value)[:100]}...")
             return {}
 
 
@@ -143,12 +182,13 @@ async def handle_session_websocket(
         audio_service = AudioService()
         
         # Проверяем, является ли это восстановлением сессии
-        is_resume = session.status == SessionStatus.IN_PROGRESS and len(session.transcript_messages) > 0
+        # Сессия считается восстановленной, если она уже начата (IN_PROGRESS)
+        is_resume = session.status == SessionStatus.IN_PROGRESS
         
         try:
             if is_resume:
-                # Восстановление сессии - загружаем историю
-                transcript_messages = sorted(session.transcript_messages, key=lambda x: x.order_index)
+                # Восстановление сессии - загружаем историю (если есть)
+                transcript_messages = sorted(session.transcript_messages, key=lambda x: x.order_index) if session.transcript_messages else []
                 question_answers = sorted(session.question_answers, key=lambda x: x.order_index) if session.question_answers else []
                 
                 # Определяем следующий вопрос из шаблона
@@ -181,9 +221,10 @@ async def handle_session_websocket(
                     else:
                         session_state["waiting_for_readiness"] = False
                 else:
-                    session_state["waiting_for_readiness"] = False
+                    # Если транскрипт пустой, сессия только началась - ждем готовности
+                    session_state["waiting_for_readiness"] = True
                 
-                # Отправляем историю клиенту
+                # Отправляем историю клиенту (может быть пустой, если сессия только началась)
                 await ws_manager.send_message(session_id, {
                     "type": "resume",
                     "message": "Сессия восстановлена",
@@ -199,6 +240,36 @@ async def handle_session_websocket(
                     ],
                     "nextQuestionIndex": next_question_index
                 })
+                
+                # Если транскрипт пустой, значит приветствие еще не было отправлено
+                # Автоматически отправляем приветствие
+                if not transcript_messages:
+                    print(f"[handle_session_websocket] Empty transcript, calling _handle_start_session for session {session_id}")
+                    try:
+                        await _handle_start_session(
+                            session_id, session, interview, db, audio_service
+                        )
+                        print(f"[handle_session_websocket] _handle_start_session completed for session {session_id}, entering main message loop")
+                    except Exception as e:
+                        print(f"[handle_session_websocket] ERROR in _handle_start_session: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Try to send error to client, but don't fail if connection is closed
+                        try:
+                            # Check if connection still exists before sending
+                            if session_id in ws_manager.active_connections:
+                                await ws_manager.send_message(session_id, {
+                                    "type": "error",
+                                    "message": f"Ошибка при генерации приветствия: {str(e)}"
+                                })
+                            else:
+                                print(f"[handle_session_websocket] Connection already closed, skipping error message")
+                        except Exception as send_error:
+                            print(f"[handle_session_websocket] Failed to send error message (connection may be closed): {send_error}")
+                        # Continue to main loop even if greeting failed
+                        print(f"[handle_session_websocket] Continuing to main message loop despite error")
+                else:
+                    print(f"[handle_session_websocket] Transcript has {len(transcript_messages)} messages, not calling _handle_start_session, entering main message loop")
             else:
                 # Новая сессия
                 try:
@@ -212,22 +283,30 @@ async def handle_session_websocket(
                     print(f"Error sending welcome message: {e}")
             
             # Main message loop
+            print(f"[handle_session_websocket] Entering main message loop for session {session_id}")
             while True:
                 try:
+                    # Check websocket connection state
+                    if session_id in ws_manager.active_connections:
+                        ws = ws_manager.active_connections[session_id]
+                        print(f"[handle_session_websocket] WebSocket state: {ws.client_state.name}, loop iteration starting")
+                    else:
+                        print(f"[handle_session_websocket] ERROR: No active connection for session {session_id} in main loop")
+                        break
+
                     # Receive message
+                    print(f"[handle_session_websocket] Waiting for message from client...")
                     data = await ws_manager.receive_message(session_id)
-                    
+                    print(f"[handle_session_websocket] Message received, type: {data.get('type')}, full data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+
                     message_type = data.get("type", "unknown")
                     
                     if message_type == "start":
+                        print(f"[handle_session_websocket] Handling 'start' message")
                         await _handle_start_session(
                             session_id, session, interview, db, audio_service
                         )
-                    
-                    elif message_type == "audio":
-                        await _handle_audio_chunk(
-                            session_id, session, interview, data, db, audio_service
-                        )
+                        print(f"[handle_session_websocket] 'start' message handled, continuing to wait for next message")
                     
                     elif message_type == "text":
                         await _handle_text_message(
@@ -247,15 +326,28 @@ async def handle_session_websocket(
                         })
                         
                 except WebSocketDisconnect:
+                    print(f"[handle_session_websocket] WebSocket disconnected for session {session_id}")
                     break
                 except Exception as e:
-                    print(f"Error handling message: {e}")
+                    print(f"[handle_session_websocket] ERROR handling message: {e}")
                     import traceback
                     traceback.print_exc()
-                    await ws_manager.send_message(session_id, {
-                        "type": "error",
-                        "message": str(e)
-                    })
+                    # Try to send error message, but check connection first
+                    try:
+                        # Only send if connection is still active
+                        if session_id in ws_manager.active_connections:
+                            await ws_manager.send_message(session_id, {
+                                "type": "error",
+                                "message": str(e)
+                            })
+                        else:
+                            print(f"[handle_session_websocket] Connection closed, cannot send error message")
+                            break  # Connection is broken, exit loop
+                    except Exception as send_error:
+                        print(f"[handle_session_websocket] ERROR sending error message (connection may be closed): {send_error}")
+                        # Check if it's a connection error
+                        if "closed" in str(send_error).lower() or session_id not in ws_manager.active_connections:
+                            break  # Connection is broken, exit loop
         
         except WebSocketDisconnect:
             pass
@@ -272,97 +364,151 @@ async def _handle_start_session(
     audio_service: AudioService
 ):
     """Handle session start"""
-    # Update session status
-    if session.status == SessionStatus.PENDING:
-        session.status = SessionStatus.IN_PROGRESS
-        session.started_at = datetime.now(timezone.utc)
-        await db.commit()
-        await db.refresh(session)
-    
-    # Get greeting from OpenAI using structured context
-    context = await _build_gpt_context(session, interview, db)
-    
-    # Generate greeting question
-    greeting_response = await openai_service.generate_session_question_structured(context)
-    greeting_text = greeting_response.question.text
-    
-    # Generate audio for greeting
-    audio_bytes = await openai_service.text_to_speech(
-        text=greeting_text,
-        language=interview.language.value
-    )
-    
-    # Save audio chunk
-    audio_path = await audio_service.save_audio(
-        interview_id=session_id,
-        audio_data=audio_bytes,
-        filename=f"greeting_{datetime.now(timezone.utc).timestamp()}.mp3"
-    )
-    
-    # Save transcript message
-    ai_message = SessionTranscript(
-        session_id=session.id,
-        role="ai",
-        message_text=greeting_text,
-        timestamp=datetime.now(timezone.utc),
-        audio_chunk_url=audio_path,
-        order_index=0
-    )
-    db.add(ai_message)
-    await db.commit()
-    
-    # Update session state
-    session_state = ws_manager.session_states[session_id]
-    session_state["started"] = True
-    session_state["waiting_for_readiness"] = True  # Флаг ожидания подтверждения готовности
-    session_state["transcript"].append({
-        "role": "ai",
-        "message": greeting_text,
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    })
-    
-    # Send greeting to client
-    await ws_manager.send_message(session_id, {
-        "type": "message",
-        "role": "ai",
-        "message": greeting_text,
-        "audio_url": audio_path,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "metadata": greeting_response.metadata.dict() if greeting_response.metadata else None
-    })
-
-
-async def _handle_audio_chunk(
-    session_id: str,
-    session: Session,
-    interview: Interview,
-    data: Dict[str, Any],
-    db: AsyncSession,
-    audio_service: AudioService
-):
-    """Handle audio chunk from user"""
-    audio_data = data.get("data")
-    if not audio_data:
-        return
-    
-    # Transcribe audio using Whisper
-    transcript_text = await openai_service.transcribe_audio(
-        audio_data=audio_data,
-        language=interview.language.value,
-        filename="user_audio.webm"
-    )
-    
-    if not transcript_text:
-        await ws_manager.send_message(session_id, {
-            "type": "error",
-            "message": "Не удалось распознать речь. Попробуйте повторить."
+    try:
+        print(f"[_handle_start_session] Starting session {session_id}")
+        
+        # Update session status
+        if session.status == SessionStatus.PENDING:
+            session.status = SessionStatus.IN_PROGRESS
+            session.started_at = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(session)
+        
+        # Получение приветствия от AI (DeepSeek) по структурированному контексту
+        print(f"[_handle_start_session] Building GPT context...")
+        context = await _build_gpt_context(session, interview, db)
+        print(f"[_handle_start_session] GPT context built")
+        
+        # Generate greeting question
+        print(f"[_handle_start_session] Generating greeting from AI (DeepSeek)...")
+        try:
+            greeting_response = await openai_service.generate_session_question_structured(context)
+            greeting_text = greeting_response.question.text
+            print(f"[_handle_start_session] Greeting generated: {greeting_text[:100]}...")
+        except Exception as gpt_error:
+            # Handle timeout or other GPT errors gracefully
+            error_msg = str(gpt_error)
+            print(f"[_handle_start_session] ERROR generating greeting: {error_msg}")
+            
+            # Check if it's a timeout error
+            if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+                # Use fallback greeting if timeout
+                print(f"[_handle_start_session] Using fallback greeting due to timeout")
+                greeting_text = f"Здравствуйте! Я провожу скрининг-собеседование в компанию {interview.company_name or 'нашу компанию'} на позицию {interview.position or 'вакансию'}. Готовы ли вы начать?"
+            else:
+                # For other errors, use a simple fallback
+                print(f"[_handle_start_session] Using fallback greeting due to error")
+                greeting_text = "Здравствуйте! Я провожу скрининг-собеседование. Готовы ли вы начать?"
+            
+            # Create a minimal response structure
+            from app.schemas.session import QuestionResponse, GPTResponse, QuestionMetadata
+            greeting_response = GPTResponse(
+                question=QuestionResponse(
+                    text=greeting_text,
+                    type="main",
+                    is_clarifying=False,
+                    is_dynamic=False,
+                    parent_session_question_answer_id=None
+                ),
+                metadata=QuestionMetadata(
+                    needsClarification=False,
+                    answerQuality="complete",
+                    shouldMoveNext=False,
+                    estimatedTimeRemaining=None
+                )
+            )
+            print(f"[_handle_start_session] Created fallback GPTResponse with metadata: {greeting_response.metadata}")
+        
+        # Update session state FIRST (before audio generation)
+        session_state = ws_manager.session_states[session_id]
+        session_state["started"] = True
+        session_state["waiting_for_readiness"] = True  # Флаг ожидания подтверждения готовности
+        session_state["transcript"].append({
+            "role": "ai",
+            "message": greeting_text,
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
-        return
-    
-    # Process user response
-    await _process_user_response(
-        session_id, session, interview, transcript_text, db, audio_service
-    )
+
+        # Generate audio for greeting synchronously (before sending message)
+        greeting_audio_url = None
+        if tts_service is not None:
+            try:
+                print(f"[_handle_start_session] Generating greeting audio using {type(tts_service).__name__}...")
+                greeting_audio_bytes = await tts_service.text_to_speech(
+                    text=greeting_text,
+                    language_code=interview.language.value
+                )
+                print(f"[_handle_start_session] Greeting audio generated, size: {len(greeting_audio_bytes)} bytes")
+
+                # Save greeting audio
+                greeting_audio_path = await audio_service.save_audio(
+                    interview_id=session_id,
+                    audio_data=greeting_audio_bytes,
+                    filename=f"greeting_{datetime.now(timezone.utc).timestamp()}.mp3"
+                )
+
+                # Convert local path to HTTP URL
+                from pathlib import Path
+                audio_path_obj = Path(greeting_audio_path)
+                filename = audio_path_obj.name
+                greeting_audio_url = f"/api/results/audio/{session_id}/{filename}"
+
+                print(f"[_handle_start_session] Greeting audio saved: {greeting_audio_path}, URL: {greeting_audio_url}")
+
+            except Exception as audio_error:
+                print(f"[_handle_start_session] ERROR generating greeting audio: {audio_error}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"[_handle_start_session] TTS disabled, skipping audio generation")
+
+        # Send greeting to client (with audio if available)
+        message = {
+            "type": "message",
+            "role": "ai",
+            "message": greeting_text,
+            "audio_url": greeting_audio_url,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "metadata": greeting_response.metadata.dict() if greeting_response.metadata else None
+        }
+        print(f"[_handle_start_session] Sending message to client with audio_url: {message.get('audio_url')}")
+        await ws_manager.send_message(session_id, message)
+        print(f"[_handle_start_session] Message sent successfully")
+
+        # Check websocket state after sending greeting
+        if session_id in ws_manager.active_connections:
+            ws = ws_manager.active_connections[session_id]
+            print(f"[_handle_start_session] WebSocket state after greeting: {ws.client_state.name}")
+        else:
+            print(f"[_handle_start_session] WARNING: WebSocket connection lost after sending greeting!")
+
+        # Save transcript with audio URL (if available)
+        ai_message = SessionTranscript(
+            session_id=session.id,
+            role="ai",
+            message_text=greeting_text,
+            timestamp=datetime.now(timezone.utc),
+            audio_chunk_url=greeting_audio_url,
+            order_index=0
+        )
+        db.add(ai_message)
+        await db.commit()
+        print(f"[_handle_start_session] Transcript saved with audio URL: {greeting_audio_url}")
+        
+    except Exception as e:
+        print(f"[_handle_start_session] ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # Send error message to client
+        try:
+            await ws_manager.send_message(session_id, {
+                "type": "error",
+                "message": f"Ошибка при генерации приветствия: {str(e)}"
+            })
+        except:
+            pass
+        raise
 
 
 async def _handle_text_message(
@@ -428,6 +574,7 @@ async def _process_user_response(
                 select(SessionTranscript)
                 .where(SessionTranscript.session_id == session.id)
                 .order_by(SessionTranscript.order_index.desc())
+                .limit(1)
             )
             last_transcript = result.scalar_one_or_none()
             next_order_index = (last_transcript.order_index + 1) if last_transcript else 0
@@ -473,6 +620,7 @@ async def _process_user_response(
         select(SessionTranscript)
         .where(SessionTranscript.session_id == session.id)
         .order_by(SessionTranscript.order_index.desc())
+        .limit(1)
     )
     last_transcript = result.scalar_one_or_none()
     next_order_index = (last_transcript.order_index + 1) if last_transcript else 0
@@ -494,13 +642,14 @@ async def _process_user_response(
             .where(SimulationScenario.session_id == session.id)
         )
         scenario = result.scalar_one_or_none()
-        
+
         if scenario:
             # Получаем последний order_index для диалога
             result = await db.execute(
                 select(SimulationDialog)
                 .where(SimulationDialog.scenario_id == scenario.id)
                 .order_by(SimulationDialog.order_index.desc())
+                .limit(1)
             )
             last_dialog = result.scalar_one_or_none()
             dialog_order = (last_dialog.order_index + 1) if last_dialog else 0
@@ -535,6 +684,7 @@ async def _process_user_response(
         select(SessionQuestionAnswer)
         .where(SessionQuestionAnswer.session_id == session.id)
         .order_by(SessionQuestionAnswer.order_index.desc())
+        .limit(1)
     )
     last_qa = result.scalar_one_or_none()
     
@@ -561,6 +711,7 @@ async def _process_user_response(
             SessionTranscript.role == "ai"
         )
         .order_by(SessionTranscript.order_index.desc())
+        .limit(1)
     )
     last_ai_message = result.scalar_one_or_none()
     last_question_text = last_ai_message.message_text if last_ai_message else "Приветствие"
@@ -648,12 +799,12 @@ async def _process_user_response(
                 simulation_active = True
                 session_state["simulation_active"] = True
     
-    # Обработка динамических вопросов: если isDynamic=true, запоминаем что нужно задать вопрос из шаблона после ответа
-    if gpt_response.question.isDynamic and context.current_interview_question:
+    # Обработка динамических вопросов: если is_dynamic=true, запоминаем что нужно задать вопрос из шаблона после ответа
+    if gpt_response.question.is_dynamic and context.current_interview_question:
         # Сохраняем текущий вопрос из шаблона, чтобы задать его после ответа на динамический
         session_state["pending_template_question"] = context.current_interview_question
         # НЕ увеличиваем current_question_index, так как вопрос из шаблона еще не задан
-    elif next_question_type == "main" and not gpt_response.question.isDynamic:
+    elif next_question_type == "main" and not gpt_response.question.is_dynamic:
         # Если задан основной вопрос из шаблона, увеличиваем индекс
         session_state["current_question_index"] = session_state.get("current_question_index", 0) + 1
     
@@ -671,10 +822,11 @@ async def _process_user_response(
                 select(SimulationDialog)
                 .where(SimulationDialog.scenario_id == scenario.id)
                 .order_by(SimulationDialog.order_index.desc())
+                .limit(1)
             )
             last_dialog = result.scalar_one_or_none()
             dialog_order = (last_dialog.order_index + 1) if last_dialog else 0
-            
+
             # Сохраняем сообщение AI в диалог симуляции
             simulation_dialog = SimulationDialog(
                 scenario_id=scenario.id,
@@ -699,17 +851,32 @@ async def _process_user_response(
     # And save next QA (next question + empty answer) after user responds
     
     # Generate audio for AI response
-    ai_audio_bytes = await openai_service.text_to_speech(
-        text=next_question_text,
-        language=interview.language.value
-    )
-    
-    # Save audio
-    ai_audio_path = await audio_service.save_audio(
-        interview_id=session_id,
-        audio_data=ai_audio_bytes,
-        filename=f"ai_response_{datetime.now(timezone.utc).timestamp()}.mp3"
-    )
+    ai_audio_url = None
+    if tts_service is not None:
+        try:
+            ai_audio_bytes = await tts_service.text_to_speech(
+                text=next_question_text,
+                language_code=interview.language.value
+            )
+
+            # Save audio
+            ai_audio_path = await audio_service.save_audio(
+                interview_id=session_id,
+                audio_data=ai_audio_bytes,
+                filename=f"ai_response_{datetime.now(timezone.utc).timestamp()}.mp3"
+            )
+
+            # Convert local path to HTTP URL
+            from pathlib import Path
+            audio_path_obj = Path(ai_audio_path)
+            filename = audio_path_obj.name
+            ai_audio_url = f"/api/results/audio/{session_id}/{filename}"
+            print(f"[_process_user_response] AI audio generated and saved: {ai_audio_url}")
+        except Exception as audio_error:
+            print(f"[_process_user_response] ERROR generating AI audio: {audio_error}")
+            ai_audio_url = None
+    else:
+        print(f"[_process_user_response] TTS disabled, skipping AI audio generation")
     
     # Save AI message in transcript
     next_order_index += 1
@@ -718,7 +885,7 @@ async def _process_user_response(
         role="ai",
         message_text=next_question_text,
         timestamp=datetime.now(timezone.utc),
-        audio_chunk_url=ai_audio_path,
+        audio_chunk_url=ai_audio_url,
         order_index=next_order_index
     )
     db.add(ai_message)
@@ -740,7 +907,7 @@ async def _process_user_response(
         "type": "message",
         "role": "ai",
         "message": next_question_text,
-        "audio_url": ai_audio_path,
+        "audio_url": ai_audio_url,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "metadata": gpt_response.metadata.dict() if gpt_response.metadata else None,
         "questionType": next_question_type
@@ -756,7 +923,19 @@ async def _handle_end_session(
     session.status = SessionStatus.COMPLETED
     session.completed_at = datetime.now(timezone.utc)
     await db.commit()
-    
+
+    # Trigger audio merging for completed interview
+    try:
+        from app.services.audio_merge_service import audio_merge_service
+        merged_audio_path = await audio_merge_service.merge_interview_audio(session_id)
+        if merged_audio_path:
+            print(f"[SessionEnd] Audio merged successfully: {merged_audio_path}")
+        else:
+            print(f"[SessionEnd] No audio chunks found to merge for session {session_id}")
+    except Exception as e:
+        print(f"[SessionEnd] Error merging audio for session {session_id}: {e}")
+        # Don't fail the session end due to audio merge errors
+
     await ws_manager.send_message(session_id, {
         "type": "ended",
         "message": "Интервью завершено",
@@ -773,6 +952,17 @@ async def _build_gpt_context(
     """Build GPT context request from session and interview"""
     
     # Build interview context
+    customer_simulation = None
+    if interview.config and interview.config.customer_simulation:
+        cs_data = interview.config.customer_simulation
+        if isinstance(cs_data, dict) and cs_data.get("enabled"):
+            from app.schemas.session import CustomerSimulation
+            customer_simulation = CustomerSimulation(
+                enabled=True,
+                role=cs_data.get("role"),
+                scenario=cs_data.get("scenario")
+            )
+    
     interview_context = InterviewContext(
         id=str(interview.id),
         topic=interview.title,
@@ -782,7 +972,8 @@ async def _build_gpt_context(
         personality=interview.personality.value,
         duration=interview.duration,
         instructions=interview.config.additional_instructions if interview.config else None,
-        allow_dynamic_questions=interview.config.allow_dynamic_questions if interview.config else False
+        allow_dynamic_questions=interview.config.allow_dynamic_questions if interview.config else False,
+        customer_simulation=customer_simulation
     )
     
     # Get current interview question (if any)

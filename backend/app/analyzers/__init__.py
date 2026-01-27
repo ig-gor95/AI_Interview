@@ -5,10 +5,10 @@ from app.analyzers.speech.pronunciation import PronunciationAnalyzer
 from app.analyzers.speech.clarity import ClarityAnalyzer
 from app.analyzers.content.gpt_analyzer import GPTContentAnalyzer
 from typing import Optional
-from app.services.openai_service import OpenAIService
+from app.services.openai_service import AIService
 
 
-def create_analyzer_registry(openai_client: Optional[OpenAIService] = None) -> AnalyzerRegistry:
+def create_analyzer_registry(openai_client: Optional[AIService] = None) -> AnalyzerRegistry:
     """Create and populate analyzer registry with all analyzers"""
     registry = AnalyzerRegistry()
     

@@ -41,6 +41,7 @@ async def save_session_question_answer(
         select(SessionQuestionAnswer)
         .where(SessionQuestionAnswer.session_id == session_id)
         .order_by(SessionQuestionAnswer.order_index.desc())
+        .limit(1)
     )
     last_qa = result.scalar_one_or_none()
     next_order_index = (last_qa.order_index + 1) if last_qa else 0

@@ -1,4 +1,4 @@
-"""OpenAI service for Whisper STT, GPT-4, and TTS"""
+"""AI Service — только DeepSeek (OpenAI-совместимый API). TTS — через Google или отключено."""
 from openai import AsyncOpenAI
 from typing import Optional, List, Dict, Any
 import io
@@ -8,49 +8,20 @@ from app.config import settings
 from app.schemas.session import GPTContextRequest, GPTResponse
 
 
-class OpenAIService:
-    """Service for OpenAI API integration"""
-    
+class AIService:
+    """Сервис для DeepSeek API (чат-модели). TTS не используется — только Google в core."""
+
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self.model_gpt = "gpt-4-turbo-preview"  # Можно использовать gpt-4 или gpt-3.5-turbo
-        self.model_tts = "tts-1"  # или "tts-1-hd" для лучшего качества
-        self.voice_tts = "alloy"  # alloy, echo, fable, onyx, nova, shimmer
-    
-    async def transcribe_audio(
-        self,
-        audio_data: bytes,
-        language: Optional[str] = "ru",
-        filename: Optional[str] = "audio.webm"
-    ) -> str:
-        """
-        Transcribe audio to text using Whisper API
-        
-        Args:
-            audio_data: Raw audio bytes
-            language: Language code (ru, en, etc.)
-            filename: Filename for the audio file
-            
-        Returns:
-            Transcribed text
-        """
-        try:
-            # Create file-like object from bytes
-            audio_file = io.BytesIO(audio_data)
-            audio_file.name = filename
-            
-            # Call Whisper API
-            transcription = await self.client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file,
-                language=language,
-                response_format="text"
-            )
-            
-            return transcription if isinstance(transcription, str) else transcription.text
-            
-        except Exception as e:
-            raise Exception(f"Error transcribing audio: {str(e)}")
+        api_key = settings.deepseek_api_key
+        base_url = "https://api.deepseek.com"
+        self.model_gpt = "deepseek-chat"
+        print(f"[AI Service] Using DeepSeek API with model: {self.model_gpt}")
+
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=120.0
+        )
     
     async def generate_chat_response(
         self,
@@ -60,7 +31,7 @@ class OpenAIService:
         max_tokens: Optional[int] = 1000
     ) -> str:
         """
-        Generate chat response using GPT-4
+        Generate chat response using GPT-3.5
         
         Args:
             messages: List of messages with role and content
@@ -189,36 +160,8 @@ Keep it concise and focused on assessing the candidate's suitability for the rol
         voice: Optional[str] = None,
         language: Optional[str] = "ru"
     ) -> bytes:
-        """
-        Convert text to speech using TTS API
-        
-        Args:
-            text: Text to convert
-            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer)
-            language: Language code
-            
-        Returns:
-            Audio bytes in mp3 format
-        """
-        try:
-            voice = voice or self.voice_tts
-            
-            # Call TTS API
-            response = await self.client.audio.speech.create(
-                model=self.model_tts,
-                voice=voice,
-                input=text
-            )
-            
-            # Read audio bytes
-            audio_bytes = b""
-            async for chunk in response:
-                audio_bytes += chunk
-            
-            return audio_bytes
-            
-        except Exception as e:
-            raise Exception(f"Error converting text to speech: {str(e)}")
+        """OpenAI TTS убран из проекта. Используйте tts_service=google в конфиге."""
+        raise RuntimeError("OpenAI TTS удалён. Используйте tts_service=google в .env")
     
     def _build_interview_system_prompt(self, session_params: Dict[str, Any]) -> str:
         """Build system prompt for interview based on session parameters"""
@@ -269,7 +212,7 @@ Your role:
         evaluation_criteria: List[str]
     ) -> Dict[str, Any]:
         """
-        Analyze interview transcript using GPT-4 for evaluation
+        Analyze interview transcript using GPT-3.5 for evaluation
         
         Args:
             transcript: List of transcript messages
@@ -401,7 +344,11 @@ Transcript:
             
             # Формируем промпт для GPT с инструкциями
             user_prompt = self._build_session_user_prompt(context, is_resume=is_resume)
-            
+
+            # For DeepSeek, add explicit JSON formatting instructions since response_format might not work
+            if self.provider == "deepseek":
+                user_prompt += "\n\nIMPORTANT: Respond ONLY with valid JSON. Do not include any text before or after the JSON. The response must be parseable JSON."
+
             # Подготовка сообщений
             messages = [
                 {"role": "system", "content": system_prompt},
@@ -409,21 +356,106 @@ Transcript:
             ]
             
             # Вызов GPT API с JSON mode
-            response = await self.client.chat.completions.create(
-                model=self.model_gpt,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1000,
-                response_format={"type": "json_object"}  # Включаем JSON mode
-            )
+            print(f"[AI] Calling GPT API with model {self.model_gpt}")
+            print(f"[AI] System prompt length: {len(system_prompt)}")
+            print(f"[AI] User prompt length: {len(user_prompt)}")
             
-            response_text = response.choices[0].message.content
+            # Prepare API call parameters
+            # Optimized for faster responses:
+            # - Lower temperature for more deterministic (faster) responses
+            # - Reduced max_tokens since interview questions are typically concise
+            api_params = {
+                "model": self.model_gpt,
+                "messages": messages,
+                "temperature": 0.5,  # Reduced from 0.7 for faster, more deterministic responses
+                "max_tokens": 800,   # Reduced from 1000 - interview questions don't need very long responses
+            }
+
+            # Enable streaming for faster response times
+            # Streaming provides incremental responses and better perceived performance
+            use_streaming = True
+            if use_streaming:
+                api_params["stream"] = True
+
+            # Enable JSON mode for DeepSeek
+            # DeepSeek supports response_format according to their documentation
+            api_params["response_format"] = {"type": "json_object"}
+
+            # Handle streaming vs non-streaming responses
+            if use_streaming:
+                print(f"[{self.provider.upper()}] Starting streaming request with model {self.model_gpt}")
+                response_text = await self._handle_streaming_response(api_params)
+            else:
+                response = await self.client.chat.completions.create(**api_params)
+                response_text = response.choices[0].message.content
             
+            print(f"[{self.provider.upper()}] Response received, length: {len(response_text) if response_text else 0}")
+            print(f"[{self.provider.upper()}] Response preview: {response_text[:200] if response_text else 'EMPTY'}...")
+
+            # Handle empty response
+            if not response_text or response_text.strip() == "":
+                print(f"[{self.provider.upper()}] Empty response received, using fallback")
+                # Create a fallback response
+                fallback_response = {
+                    "question": {
+                        "text": "Расскажите о вашем опыте работы по данной специальности.",
+                        "type": "main",
+                        "isClarifying": False,
+                        "isDynamic": False,
+                        "parentSessionQuestionAnswerId": None
+                    },
+                    "metadata": {
+                        "needsClarification": False,
+                        "answerQuality": "complete",
+                        "shouldMoveNext": True,
+                        "estimatedTimeRemaining": 25
+                    }
+                }
+                return GPTResponse(**fallback_response)
+
             # Парсим JSON ответ
             try:
                 response_data = json.loads(response_text)
-                return GPTResponse(**response_data)
-            except json.JSONDecodeError:
+                print(f"[AI] JSON parsed successfully")
+                
+                # Process metadata to handle None values and type conversions
+                if "metadata" in response_data and response_data["metadata"]:
+                    metadata = response_data["metadata"]
+
+                    # Convert estimatedTimeRemaining from float to int if present
+                    if "estimatedTimeRemaining" in metadata:
+                        estimated_time = metadata["estimatedTimeRemaining"]
+                        if isinstance(estimated_time, float):
+                            metadata["estimatedTimeRemaining"] = int(estimated_time)
+                            print(f"[AI] Converted estimatedTimeRemaining from float to int: {estimated_time} -> {int(estimated_time)}")
+
+                    # Ensure answerQuality is not None (set default if needed)
+                    if "answerQuality" in metadata and metadata["answerQuality"] is None:
+                        metadata["answerQuality"] = "complete"
+                        print(f"[AI] Set default answerQuality: complete")
+
+                    # Ensure other metadata fields are not None
+                    if "needsClarification" in metadata and metadata["needsClarification"] is None:
+                        metadata["needsClarification"] = False
+                    if "shouldMoveNext" in metadata and metadata["shouldMoveNext"] is None:
+                        metadata["shouldMoveNext"] = False
+                else:
+                    # If no metadata provided, add default metadata
+                    response_data["metadata"] = {
+                        "needsClarification": False,
+                        "answerQuality": "complete",
+                        "shouldMoveNext": False,
+                        "estimatedTimeRemaining": None
+                    }
+                    print(f"[AI] Added default metadata")
+                
+                result = GPTResponse(**response_data)
+                print(f"[AI] GPTResponse created, question: {result.question.text[:100]}...")
+                print(f"[AI] Metadata: {result.metadata}")
+                return result
+            except json.JSONDecodeError as e:
+                print(f"[AI] JSON decode error: {e}")
+                print(f"[AI] Response text: {response_text}")
                 # Если JSON невалидный, пытаемся извлечь его
                 json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
                 if json_match:
@@ -433,7 +465,54 @@ Transcript:
                     raise Exception(f"Invalid JSON response from GPT: {response_text}")
                     
         except Exception as e:
+            print(f"[AI] Exception in generate_session_question_with_json_mode: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise Exception(f"Error generating session question: {str(e)}")
+
+    async def _handle_streaming_response(self, api_params: dict) -> str:
+        """
+        Handle streaming response from API and accumulate chunks into complete JSON
+        
+        Args:
+            api_params: API parameters for the request
+            
+        Returns:
+            Complete response text as string
+        """
+        try:
+            print(f"[{self.provider.upper()}] Starting streaming response handling")
+            # When stream=True, create() returns an async iterator directly
+            stream = self.client.chat.completions.create(**api_params)
+            
+            accumulated_text = ""
+            chunk_count = 0
+            
+            async for chunk in stream:
+                if chunk.choices and len(chunk.choices) > 0:
+                    delta = chunk.choices[0].delta
+                    if delta and delta.content:
+                        content = delta.content
+                        accumulated_text += content
+                        chunk_count += 1
+                        
+                        # Log progress every 10 chunks
+                        if chunk_count % 10 == 0:
+                            print(f"[{self.provider.upper()}] Received {chunk_count} chunks, {len(accumulated_text)} chars so far...")
+            
+            print(f"[{self.provider.upper()}] Streaming complete: {chunk_count} chunks, {len(accumulated_text)} total chars")
+            return accumulated_text.strip()
+            
+        except Exception as e:
+            print(f"[{self.provider.upper()}] Error in streaming response: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback: try non-streaming request
+            print(f"[{self.provider.upper()}] Falling back to non-streaming request")
+            api_params_no_stream = api_params.copy()
+            api_params_no_stream.pop("stream", None)
+            response = await self.client.chat.completions.create(**api_params_no_stream)
+            return response.choices[0].message.content if response.choices[0].message.content else ""
     
     def _build_session_system_prompt(self, context: GPTContextRequest) -> str:
         """Формирует системный промпт для скрининг-собеседования"""
@@ -488,19 +567,25 @@ Transcript:
 4. ПЕРЕСПРОС:
    - Если времени много и кандидат дал невнятный ответ - можешь переспросить вопрос, сформулировав его по-другому
 
-5. ЗАДАВАЙ ВОПРОСЫ ПО ОДНОМУ - никогда не задавай несколько вопросов сразу"""
+5. ЗАДАВАЙ ВОПРОСЫ ПО ОДНОМУ - никогда не задавай несколько вопросов сразу
+
+6. НЕ ПОВТОРЯЙ ВОПРОСЫ - СТРОГО ЗАПРЕЩЕНО:
+   - НИКОГДА не задавай вопрос, который уже был задан в этом интервью
+   - Все заданные вопросы перечислены в разделе "УЖЕ ЗАДАННЫЕ ВОПРОСЫ"
+   - Если вопрос был задан - переходи к следующему вопросу из шаблона
+   - Если все вопросы из шаблона заданы - переходи к симуляции или заверши интервью"""
         
         # Добавляем информацию о customer_simulation, если оно есть
-        if interview.config and interview.config.customer_simulation:
-            cs_data = interview.config.customer_simulation
-            if isinstance(cs_data, dict) and cs_data.get("enabled"):
-                prompt += f"""
+        if interview.customer_simulation and interview.customer_simulation.enabled:
+            prompt += f"""
 
 6. МОДЕЛИРОВАНИЕ РЕАЛЬНОЙ РАБОЧЕЙ СИТУАЦИИ (customer_simulation):
    - В конце интервью (когда все основные вопросы заданы или осталось < 5 минут) можно провести симуляцию
+   - В рамках одной симуляции задай не более 1–2 вопросов; после ответа кандидата сразу завершай симуляцию и переходи к завершению интервью
+   - Перед первым вопросом в симуляции обязательно произнеси короткую вводную фразу, например: «Давайте представим ситуацию» или «Представьте, что…»
    - Ты должен сыграть роль клиента согласно сценарию:
-     * Роль клиента: {cs_data.get("role", "не указана")}
-     * Описание сценария: {cs_data.get("scenario", "не указан")}
+     * Роль клиента: {interview.customer_simulation.role or "не указана"}
+     * Описание сценария: {interview.customer_simulation.scenario or "не указан"}
    - Веди себя как указанный клиент (например, недовольный клиент, гость, заказчик)
    - Задавай вопросы или высказывай претензии от лица этого клиента
    - Оценивай реакцию кандидата на стрессовую ситуацию
@@ -573,38 +658,51 @@ Transcript:
         else:
             prompt += "\n✅ Времени достаточно. Можешь задавать уточняющие вопросы для лучшего понимания."
         
-        # Следующий вопрос из шаблона (ВСЕГДА указывать)
-        if context.current_interview_question:
-            current_q = context.current_interview_question
+        # Проверяем, является ли это первым сообщением (приветствием)
+        is_first_message = len(context.conversation_history) == 0
+        
+        if is_first_message:
+            # Первое сообщение - приветствие
             prompt += f"""
+
+🎯 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО СООБЩЕНИЯ (ПРИВЕТСТВИЕ):
+Ты должен поздороваться и спросить о готовности начать интервью.
+Формат: "Здравствуйте! Я провожу скрининг-собеседование в компанию {interview.company or "компанию"} на позицию {interview.position}. Готовы ли вы начать?"
+
+ВАЖНО: Это приветствие, НЕ задавай первый вопрос из шаблона сейчас. Сначала дождись подтверждения готовности от кандидата."""
+        else:
+            # Следующий вопрос из шаблона (ВСЕГДА указывать для последующих сообщений)
+            if context.current_interview_question:
+                current_q = context.current_interview_question
+                prompt += f"""
 
 СЛЕДУЮЩИЙ ВОПРОС ИЗ ШАБЛОНА:
 - Текст: {current_q.text}
 - Порядковый номер: {current_q.order_index + 1}"""
-            
-            if current_q.clarifying_questions:
-                prompt += f"\n- Уточняющие подвопросы для этого вопроса:\n"
-                for i, clar_q in enumerate(current_q.clarifying_questions, 1):
-                    prompt += f"  {i}. {clar_q}\n"
-            
-            # Инструкции о возможности задать динамический вопрос
-            if context.allow_dynamic_questions:
-                prompt += f"""
+                
+                if current_q.clarifying_questions:
+                    prompt += f"\n- Уточняющие подвопросы для этого вопроса:\n"
+                    for i, clar_q in enumerate(current_q.clarifying_questions, 1):
+                        prompt += f"  {i}. {clar_q}\n"
+                
+                # Инструкции о возможности задать динамический вопрос
+                if context.allow_dynamic_questions:
+                    prompt += f"""
 \nИНСТРУКЦИЯ: Следующий вопрос из шаблона: "{current_q.text}"
 Ты можешь:
 1. Задать этот вопрос из шаблона (isDynamic = false)
 2. ИЛИ если считаешь это действительно важным для оценки кандидата, сначала задать свой дополнительный вопрос (isDynamic = true), а затем задать вопрос из шаблона
 НО: вопросы из шаблона всегда в приоритете!"""
-            else:
-                prompt += f"""
+                else:
+                    prompt += f"""
 \nИНСТРУКЦИЯ: Задай следующий вопрос из шаблона: "{current_q.text}"
 Ты можешь использовать уточняющие подвопросы, если ответ кандидата недостаточно точен.
 НЕ придумывай свои вопросы (isDynamic должен быть false)."""
-        else:
-            # Если вопросов из шаблона больше нет
-            prompt += "\n\n⚠️ Все основные вопросы из шаблона заданы."
-            if context.allow_dynamic_questions:
-                prompt += " Ты можешь задать дополнительные вопросы, если это важно для оценки."
+            else:
+                # Если вопросов из шаблона больше нет
+                prompt += "\n\n⚠️ Все основные вопросы из шаблона заданы."
+                if context.allow_dynamic_questions:
+                    prompt += " Ты можешь задать дополнительные вопросы, если это важно для оценки."
         
         # История диалога
         if context.conversation_history:
@@ -621,6 +719,13 @@ Transcript:
             for i, qa in enumerate(context.session_history[-5:], 1):  # Последние 5 для контекста
                 prompt += f"\n{i}. [{qa.question_type.upper()}] {qa.question_text}"
                 prompt += f"\n   Ответ кандидата: {qa.answer_text}"
+
+            # Список всех уже заданных вопросов для предотвращения повторений
+            all_asked_questions = [qa.question_text for qa in context.session_history]
+            if all_asked_questions:
+                prompt += f"\n\nУЖЕ ЗАДАННЫЕ ВОПРОСЫ (НЕЛЬЗЯ ПОВТОРЯТЬ):"
+                for i, question in enumerate(all_asked_questions, 1):
+                    prompt += f"\n{i}. {question}"
         
         # Последний ответ пользователя
         if context.user_response:
@@ -635,22 +740,22 @@ Transcript:
 - Отвечено основных вопросов: {progress.answered_questions}"""
         
         # Информация о customer_simulation
-        if interview.config and interview.config.customer_simulation:
-            cs_data = interview.config.customer_simulation
-            if isinstance(cs_data, dict) and cs_data.get("enabled"):
-                # Проверяем, подходит ли интервью к концу
-                all_questions_asked = progress.current_question_index >= progress.total_questions
-                time_low = remaining_minutes < 5
-                
-                if all_questions_asked or time_low:
-                    prompt += f"""
+        if interview.customer_simulation and interview.customer_simulation.enabled:
+            # Проверяем, подходит ли интервью к концу
+            all_questions_asked = progress.current_question_index >= progress.total_questions
+            time_low = remaining_minutes < 5
+            
+            if all_questions_asked or time_low:
+                prompt += f"""
 
 🎭 МОДЕЛИРОВАНИЕ РЕАЛЬНОЙ РАБОЧЕЙ СИТУАЦИИ:
 Интервью подходит к концу. Ты можешь провести симуляцию реальной рабочей ситуации.
-- Роль клиента: {cs_data.get("role", "не указана")}
-- Описание сценария: {cs_data.get("scenario", "не указан")}
+- Роль клиента: {interview.customer_simulation.role or "не указана"}
+- Описание сценария: {interview.customer_simulation.scenario or "не указан"}
 
 ИНСТРУКЦИЯ: Сыграй роль этого клиента и проведи симуляцию. Веди себя соответственно сценарию.
+Задай в этой симуляции не более 1–2 вопросов. После ответа кандидата заверши симуляцию, не продолжай разыгрывать сценарий.
+Начни с вводной фразы, например: «Давайте представим ситуацию» или «Представьте, что…».
 Оценивай реакцию кандидата на стрессовую ситуацию. После симуляции можно завершить интервью."""
         
         prompt += "\n\nЗадай следующий вопрос на основе этого контекста. Верни ответ ТОЛЬКО в JSON формате согласно структуре из системного промпта."
