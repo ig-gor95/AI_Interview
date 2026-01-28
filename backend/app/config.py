@@ -23,8 +23,10 @@ class Settings(BaseSettings):
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
     google_cloud_credentials_path: str = "majestic-camp-315514-943a8d82b2b5.json"  # Path to service account JSON file
-    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Leda"  # Leda (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
+    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Fenrir"  # Leda (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
     google_cloud_voice_language: str = "ru-RU"
+    google_cloud_speaking_rate: float = 1.0  # Скорость речи (0.25-4.0), можно переопределить через GOOGLE_CLOUD_SPEAKING_RATE в .env. Рекомендуется 1.0-1.3 для ускорения
+    google_cloud_pitch: float = 4.0  # Высота тона в семитонах (-20.0 до +20.0), можно переопределить через GOOGLE_CLOUD_PITCH в .env. Положительные значения для более выразительной интонации (рекомендуется 2.0-4.0 для Leda)
     
     # Security
     secret_key: str = "test-secret-key"
@@ -33,7 +35,6 @@ class Settings(BaseSettings):
     
     # CORS
     cors_origins: str = "http://localhost:5173"
-    
     # Environment
     environment: str = "development"
     debug: bool = True

@@ -2,9 +2,11 @@
 import json
 import uuid
 import base64
+import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import WebSocket, WebSocketDisconnect, HTTPException, status
+from websockets.exceptions import ConnectionClosedError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -16,6 +18,7 @@ from app.models.simulation import SimulationScenario, SimulationDialog
 from app.services.openai_service import AIService
 from app.services.audio_service import AudioService
 from app.core import tts_service
+from app.config import settings
 from app.services.session_service import (
     save_session_question_answer,
     get_session_question_answer_summaries
@@ -40,6 +43,7 @@ class SessionWebSocketManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.session_states: Dict[str, Dict[str, Any]] = {}
+        self.receive_locks: Dict[str, asyncio.Lock] = {}  # Lock per session to prevent concurrent receive calls
     
     async def connect(self, websocket: WebSocket, session_id: str):
         """Accept WebSocket connection"""
@@ -57,11 +61,14 @@ class SessionWebSocketManager:
             }
     
     def disconnect(self, session_id: str):
-        """Remove WebSocket connection"""
+        """Remove WebSocket connection and clean up all session resources"""
         if session_id in self.active_connections:
             del self.active_connections[session_id]
         if session_id in self.session_states:
             del self.session_states[session_id]
+        if session_id in self.receive_locks:
+            del self.receive_locks[session_id]
+        print(f"[WebSocket] Disconnected session {session_id} and cleaned up resources")
     
     async def send_message(self, session_id: str, message: Dict[str, Any]):
         """Send message to client"""
@@ -93,35 +100,76 @@ class SessionWebSocketManager:
                 self.disconnect(session_id)
     
     async def receive_message(self, session_id: str) -> Dict[str, Any]:
-        """Receive message from client"""
+        """Receive message from client with lock protection to prevent concurrent receives"""
         if session_id not in self.active_connections:
             raise ValueError("No active connection")
 
-        print(f"[WebSocket] receive_message called for session {session_id}")
-        data = await self.active_connections[session_id].receive()
-        print(f"[WebSocket] Raw received data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+        # Get or create lock for this session
+        if session_id not in self.receive_locks:
+            self.receive_locks[session_id] = asyncio.Lock()
+        
+        lock = self.receive_locks[session_id]
+        
+        async with lock:
+            # Double-check connection still exists after acquiring lock
+            if session_id not in self.active_connections:
+                raise ValueError("No active connection")
+            
+            websocket = self.active_connections[session_id]
+            
+            # Check connection state before receiving
+            if websocket.client_state.name not in ["CONNECTED"]:
+                print(f"[WebSocket] Connection for session {session_id} is not in CONNECTED state: {websocket.client_state.name}")
+                self.disconnect(session_id)
+                raise WebSocketDisconnect(f"Connection not in CONNECTED state: {websocket.client_state.name}")
 
-        if "text" in data:
-            text_data = data["text"]
-            print(f"[WebSocket] Received text message, length: {len(text_data)}, first 200 chars: {text_data[:200]}...")
+            print(f"[WebSocket] receive_message called for session {session_id}")
+            
             try:
-                parsed = json.loads(text_data)
-                print(f"[WebSocket] JSON parsed successfully, type: {parsed.get('type')}, keys: {list(parsed.keys())}")
-                return parsed
-            except json.JSONDecodeError as e:
-                print(f"[WebSocket] ERROR: Failed to parse JSON: {e}")
-                print(f"[WebSocket] Raw text: {text_data}")
-                return {"type": "unknown", "raw_text": text_data}
-        elif "bytes" in data:
-            bytes_data = data["bytes"]
-            print(f"[WebSocket] Received binary message, size: {len(bytes_data)} bytes")
-            return {"type": "audio", "data": bytes_data}
-        else:
-            print(f"[WebSocket] Received unknown message format, keys: {list(data.keys())}")
-            for key, value in data.items():
-                if key != "text" and key != "bytes":  # Don't log large data
-                    print(f"[WebSocket]   {key}: {type(value)} - {str(value)[:100]}...")
-            return {}
+                data = await websocket.receive()
+                print(f"[WebSocket] Raw received data type: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
+
+                if "text" in data:
+                    text_data = data["text"]
+                    print(f"[WebSocket] Received text message, length: {len(text_data)}, first 200 chars: {text_data[:200]}...")
+                    try:
+                        parsed = json.loads(text_data)
+                        print(f"[WebSocket] JSON parsed successfully, type: {parsed.get('type')}, keys: {list(parsed.keys())}")
+                        return parsed
+                    except json.JSONDecodeError as e:
+                        print(f"[WebSocket] ERROR: Failed to parse JSON: {e}")
+                        print(f"[WebSocket] Raw text: {text_data}")
+                        return {"type": "unknown", "raw_text": text_data}
+                elif "bytes" in data:
+                    bytes_data = data["bytes"]
+                    print(f"[WebSocket] Received binary message, size: {len(bytes_data)} bytes")
+                    return {"type": "audio", "data": bytes_data}
+                else:
+                    print(f"[WebSocket] Received unknown message format, keys: {list(data.keys())}")
+                    for key, value in data.items():
+                        if key != "text" and key != "bytes":  # Don't log large data
+                            print(f"[WebSocket]   {key}: {type(value)} - {str(value)[:100]}...")
+                    return {}
+            
+            except WebSocketDisconnect as e:
+                print(f"[WebSocket] WebSocketDisconnect in receive_message for session {session_id}: {e}")
+                self.disconnect(session_id)
+                raise
+            except Exception as e:
+                error_str = str(e).lower()
+                # Handle connection closure errors
+                if "closed" in error_str or "disconnect" in error_str or "no close frame" in error_str:
+                    print(f"[WebSocket] Connection closed during receive for session {session_id}: {e}")
+                    self.disconnect(session_id)
+                    raise WebSocketDisconnect(f"Connection closed: {e}")
+                # Handle concurrent receive error
+                if "cannot call recv" in error_str or "already waiting" in error_str:
+                    print(f"[WebSocket] Concurrent receive detected for session {session_id} (should be prevented by lock): {e}")
+                    # This shouldn't happen with lock, but handle it gracefully
+                    raise WebSocketDisconnect(f"Concurrent receive error: {e}")
+                # Re-raise other errors
+                print(f"[WebSocket] Unexpected error in receive_message for session {session_id}: {e}")
+                raise
 
 
 # Global WebSocket manager instance
@@ -325,29 +373,71 @@ async def handle_session_websocket(
                             "message": f"Unknown message type: {message_type}"
                         })
                         
-                except WebSocketDisconnect:
-                    print(f"[handle_session_websocket] WebSocket disconnected for session {session_id}")
+                except WebSocketDisconnect as e:
+                    print(f"[handle_session_websocket] WebSocket disconnected for session {session_id}: {e}")
                     break
-                except Exception as e:
-                    print(f"[handle_session_websocket] ERROR handling message: {e}")
+                except ValueError as e:
+                    # ValueError from receive_message means no active connection
+                    if "No active connection" in str(e):
+                        print(f"[handle_session_websocket] No active connection for session {session_id}, exiting loop")
+                        break
+                    # Other ValueError - try to send error if connection is still active
+                    print(f"[handle_session_websocket] ValueError handling message: {e}")
                     import traceback
                     traceback.print_exc()
-                    # Try to send error message, but check connection first
-                    try:
-                        # Only send if connection is still active
-                        if session_id in ws_manager.active_connections:
+                    if session_id in ws_manager.active_connections:
+                        try:
                             await ws_manager.send_message(session_id, {
                                 "type": "error",
                                 "message": str(e)
                             })
-                        else:
-                            print(f"[handle_session_websocket] Connection closed, cannot send error message")
-                            break  # Connection is broken, exit loop
-                    except Exception as send_error:
-                        print(f"[handle_session_websocket] ERROR sending error message (connection may be closed): {send_error}")
-                        # Check if it's a connection error
-                        if "closed" in str(send_error).lower() or session_id not in ws_manager.active_connections:
-                            break  # Connection is broken, exit loop
+                        except Exception:
+                            # Connection closed during send, exit loop
+                            break
+                except Exception as e:
+                    error_str = str(e).lower()
+                    # Check if this is a connection-related error
+                    is_connection_error = (
+                        "closed" in error_str or 
+                        "disconnect" in error_str or 
+                        "no close frame" in error_str or
+                        "cannot call recv" in error_str or
+                        isinstance(e, (WebSocketDisconnect, ConnectionClosedError))
+                    )
+                    
+                    print(f"[handle_session_websocket] ERROR handling message: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    
+                    # If it's a connection error, don't try to send error message - just exit
+                    if is_connection_error:
+                        print(f"[handle_session_websocket] Connection error detected, exiting loop without sending error message")
+                        break
+                    
+                    # For non-connection errors, try to send error message if connection is still active
+                    if session_id in ws_manager.active_connections:
+                        try:
+                            # Check connection state before sending
+                            ws = ws_manager.active_connections[session_id]
+                            if ws.client_state.name == "CONNECTED":
+                                await ws_manager.send_message(session_id, {
+                                    "type": "error",
+                                    "message": str(e)
+                                })
+                            else:
+                                print(f"[handle_session_websocket] Connection not in CONNECTED state ({ws.client_state.name}), cannot send error message")
+                                break
+                        except (WebSocketDisconnect, ConnectionClosedError) as send_error:
+                            print(f"[handle_session_websocket] Connection closed while sending error message: {send_error}")
+                            break
+                        except Exception as send_error:
+                            error_str_send = str(send_error).lower()
+                            if "closed" in error_str_send or "disconnect" in error_str_send:
+                                print(f"[handle_session_websocket] Connection closed during error send: {send_error}")
+                                break
+                    else:
+                        print(f"[handle_session_websocket] Connection already closed, cannot send error message")
+                        break
         
         except WebSocketDisconnect:
             pass
@@ -375,9 +465,9 @@ async def _handle_start_session(
             await db.refresh(session)
         
         # Получение приветствия от AI (DeepSeek) по структурированному контексту
-        print(f"[_handle_start_session] Building GPT context...")
+        print(f"[_handle_start_session] Building DeepSeek context...")
         context = await _build_gpt_context(session, interview, db)
-        print(f"[_handle_start_session] GPT context built")
+        print(f"[_handle_start_session] DeepSeek context built")
         
         # Generate greeting question
         print(f"[_handle_start_session] Generating greeting from AI (DeepSeek)...")
@@ -385,9 +475,9 @@ async def _handle_start_session(
             greeting_response = await openai_service.generate_session_question_structured(context)
             greeting_text = greeting_response.question.text
             print(f"[_handle_start_session] Greeting generated: {greeting_text[:100]}...")
-        except Exception as gpt_error:
-            # Handle timeout or other GPT errors gracefully
-            error_msg = str(gpt_error)
+        except Exception as ai_error:
+            # Handle timeout or other AI service errors gracefully
+            error_msg = str(ai_error)
             print(f"[_handle_start_session] ERROR generating greeting: {error_msg}")
             
             # Check if it's a timeout error
@@ -437,6 +527,7 @@ async def _handle_start_session(
                 greeting_audio_bytes = await tts_service.text_to_speech(
                     text=greeting_text,
                     language_code=interview.language.value
+                    # voice_name not specified - will use randomly selected voice from service initialization
                 )
                 print(f"[_handle_start_session] Greeting audio generated, size: {len(greeting_audio_bytes)} bytes")
 
@@ -610,10 +701,10 @@ async def _process_user_response(
             session_state["waiting_for_readiness"] = False
             session_state["current_question_index"] = 0
         elif is_not_ready:
-            # Пользователь не готов - GPT должен попросить подать сигнал
+            # Пользователь не готов - AI должен попросить подать сигнал
             # Продолжаем с флагом waiting_for_readiness = True
             pass
-        # Если ответ неясный, GPT сам решит что делать
+        # Если ответ неясный, AI сам решит что делать
     
     # Get current order index
     result = await db.execute(
@@ -699,10 +790,10 @@ async def _process_user_response(
             parent_qa_id = last_qa.id
         elif last_qa.question_type in ("clarifying", "dynamic"):
             # Can be either clarifying or dynamic
-            question_type = "clarifying"  # Default, GPT can change it to dynamic
+            question_type = "clarifying"  # Default, AI can change it to dynamic
             parent_qa_id = last_qa.parent_session_qa_id or last_qa.id
     
-    # For now, we'll save it after GPT generates the question
+    # For now, we'll save it after AI generates the question
     # Here we need to get the question text from the last AI message
     result = await db.execute(
         select(SessionTranscript)
@@ -758,10 +849,10 @@ async def _process_user_response(
             )
             session_state["last_question_qa_id"] = qa.id
         
-        # Build GPT context with user response
+        # Build AI context with user response
         context = await _build_gpt_context(session, interview, db, user_response_text=user_text, simulation_done=simulation_done)
     
-    # Generate next question using structured GPT API
+    # Generate next question using structured DeepSeek API
     gpt_response = await openai_service.generate_session_question_structured(context)
     
     next_question_text = gpt_response.question.text
@@ -781,7 +872,7 @@ async def _process_user_response(
     
     # Проверяем, активирована ли симуляция (customer_simulation)
     # Симуляция активируется, если все вопросы заданы или осталось мало времени
-    # и GPT начинает играть роль клиента
+    # и AI начинает играть роль клиента
     simulation_active = False
     if interview.config and interview.config.customer_simulation:
         cs_data = interview.config.customer_simulation
@@ -856,11 +947,11 @@ async def _process_user_response(
             db.add(simulation_dialog)
             await db.commit()
     
-    # Save next question-answer (question asked by GPT)
+    # Save next question-answer (question asked by AI)
     # We save it with empty answer for now, answer will be filled when user responds
     # Actually, we save question-answer pairs when user answers, so we should save the question now
     # But actually, we save QA pairs when we have both question and answer
-    # So for now, we'll just save the answer we got, and when GPT asks next question,
+    # So for now, we'll just save the answer we got, and when AI asks next question,
     # we'll save that question with empty answer, then when user answers, we update it
     
     # For now, let's save the question as a QA with empty answer (will be updated)
@@ -875,6 +966,7 @@ async def _process_user_response(
             ai_audio_bytes = await tts_service.text_to_speech(
                 text=next_question_text,
                 language_code=interview.language.value
+                # voice_name not specified - will use randomly selected voice from service initialization
             )
 
             # Save audio
@@ -968,7 +1060,7 @@ async def _build_gpt_context(
     user_response_text: Optional[str] = None,
     simulation_done: bool = False
 ) -> GPTContextRequest:
-    """Build GPT context request from session and interview"""
+    """Build AI context request from session and interview (for DeepSeek API)"""
     
     # Build interview context
     customer_simulation = None

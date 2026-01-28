@@ -41,7 +41,7 @@ class AIService:
         max_tokens: Optional[int] = 1000
     ) -> str:
         """
-        Generate chat response using GPT-3.5
+        Generate chat response using DeepSeek API
         
         Args:
             messages: List of messages with role and content
@@ -64,7 +64,7 @@ class AIService:
             
             chat_messages.extend(messages)
             
-            # Call GPT API
+            # Call DeepSeek API
             response = await self.client.chat.completions.create(
                 model=self.model_gpt,
                 messages=chat_messages,
@@ -100,7 +100,7 @@ class AIService:
         # Get specific question if available
         questions = session_params.get("questions", [])
         if questions and question_index < len(questions):
-            # Use predefined question, but GPT can rephrase if needed
+            # Use predefined question, but DeepSeek can rephrase if needed
             specific_question = questions[question_index]
             
             prompt = f"""You are an AI interviewer conducting an interview for the position: {session_params.get('position', 'N/A')}.
@@ -222,7 +222,7 @@ Your role:
         evaluation_criteria: List[str]
     ) -> Dict[str, Any]:
         """
-        Analyze interview transcript using GPT-3.5 for evaluation
+        Analyze interview transcript using DeepSeek API for evaluation
         
         Args:
             transcript: List of transcript messages
@@ -295,7 +295,7 @@ Transcript:
             max_tokens=2000
         )
         
-        # Parse JSON response (GPT sometimes wraps in markdown)
+        # Parse JSON response (DeepSeek sometimes wraps in markdown)
         import json
         import re
         
@@ -343,7 +343,7 @@ Transcript:
             context: GPTContextRequest с полным контекстом интервью
             
         Returns:
-            GPTResponse со структурированным ответом от GPT
+            GPTResponse со структурированным ответом от DeepSeek
         """
         try:
             # Формируем системный промпт
@@ -352,7 +352,7 @@ Transcript:
             # Определяем, является ли это восстановлением сессии (если есть история больше чем приветствие)
             is_resume = len(context.conversation_history) > 1
             
-            # Формируем промпт для GPT с инструкциями
+            # Формируем промпт для DeepSeek с инструкциями
             user_prompt = self._build_session_user_prompt(context, is_resume=is_resume)
 
             # For DeepSeek, add explicit JSON formatting instructions since response_format might not work
@@ -365,8 +365,8 @@ Transcript:
                 {"role": "user", "content": user_prompt}
             ]
             
-            # Вызов GPT API с JSON mode
-            print(f"[AI] Calling GPT API with model {self.model_gpt}")
+            # Вызов DeepSeek API с JSON mode
+            print(f"[AI] Calling DeepSeek API with model {self.model_gpt}")
             print(f"[AI] System prompt length: {len(system_prompt)}")
             print(f"[AI] User prompt length: {len(user_prompt)}")
             
@@ -378,7 +378,11 @@ Transcript:
                 "model": self.model_gpt,
                 "messages": messages,
                 "temperature": 0.5,  # Reduced from 0.7 for faster, more deterministic responses
-                "max_tokens": 800,   # Reduced from 1000 - interview questions don't need very long responses
+                # Interview реплики короткие, поэтому агрессивно ограничиваем длину ответа
+                # Это уменьшает задержку и стоимость. Для длинных аналитических запросов
+                # (например, финальный разбор интервью) используются отдельные методы
+                # с собственными max_tokens.
+                "max_tokens": 256,
             }
 
             # Enable streaming for faster response times
@@ -483,7 +487,7 @@ Transcript:
                     response_data = json.loads(json_match.group())
                     return GPTResponse(**response_data)
                 else:
-                    raise Exception(f"Invalid JSON response from GPT: {response_text}")
+                    raise Exception(f"Invalid JSON response from DeepSeek: {response_text}")
                     
         except Exception as e:
             print(f"[AI] Exception in generate_session_question_with_json_mode: {str(e)}")
@@ -739,8 +743,8 @@ Transcript:
         # История диалога
         if context.conversation_history:
             prompt += "\n\nИСТОРИЯ ДИАЛОГА:"
-            # Показываем последние 5-10 сообщений для контекста
-            recent_history = context.conversation_history[-10:] if len(context.conversation_history) > 10 else context.conversation_history
+            # Показываем только последние 4–6 сообщений для контекста, чтобы не раздувать промпт
+            recent_history = context.conversation_history[-6:] if len(context.conversation_history) > 6 else context.conversation_history
             for msg in recent_history:
                 role_label = "AI" if msg.role == "ai" else "Кандидат"
                 prompt += f"\n{role_label}: {msg.message}"
@@ -748,12 +752,16 @@ Transcript:
         # История вопросов и ответов
         if context.session_history:
             prompt += "\n\nИСТОРИЯ ВОПРОСОВ И ОТВЕТОВ:"
-            for i, qa in enumerate(context.session_history[-5:], 1):  # Последние 5 для контекста
+            # Показываем последние 3–4 Q&A для контекста
+            recent_qas = context.session_history[-4:] if len(context.session_history) > 4 else context.session_history
+            for i, qa in enumerate(recent_qas, 1):
                 prompt += f"\n{i}. [{qa.question_type.upper()}] {qa.question_text}"
                 prompt += f"\n   Ответ кандидата: {qa.answer_text}"
 
             # Список всех уже заданных вопросов для предотвращения повторений
-            all_asked_questions = [qa.question_text for qa in context.session_history]
+            # Чтобы не передавать в промпт всю историю, ограничиваемся последними 10 вопросами
+            recent_for_dedup = context.session_history[-10:] if len(context.session_history) > 10 else context.session_history
+            all_asked_questions = [qa.question_text for qa in recent_for_dedup]
             if all_asked_questions:
                 prompt += f"\n\nУЖЕ ЗАДАННЫЕ ВОПРОСЫ (НЕЛЬЗЯ ПОВТОРЯТЬ):"
                 for i, question in enumerate(all_asked_questions, 1):
