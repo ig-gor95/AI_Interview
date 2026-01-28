@@ -20,6 +20,7 @@ openai==1.3.5
 
 # TTS
 google-cloud-texttospeech==2.16.3
+pydub==0.25.1  # For audio merging (requires ffmpeg system dependency)
 
 # Валидация
 pydantic==2.5.0
@@ -28,12 +29,9 @@ email-validator==2.1.0
 
 # WebSocket
 websockets==12.0
-python-socketio==5.10.0
 
 # Утилиты
 aiofiles==23.2.1
-httpx==0.25.2
-structlog==23.2.0
 
 # Тестирование (опционально)
 pytest==7.4.3
