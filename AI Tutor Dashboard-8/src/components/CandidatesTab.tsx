@@ -10,8 +10,11 @@ interface Result {
   sessionId: string;
   score?: number;
   qualityRating?: QualityRating;
-  completedAt: string;
+  completedAt?: string | null;
   transcript?: Array<{ role: string; message?: string; content?: string }>;
+  transcriptCount?: number;
+  userMessageCount?: number;
+  position?: string;
 }
 
 interface Props {
@@ -74,7 +77,7 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
       signals.push({ type: 'negative', text: 'Уходит от вопросов' });
     }
 
-    // Добавляем сигнал о длине ответов
+    // Добавляем сигнал о длине ответов (only when full transcript available)
     if (userMessages.length > 0) {
       const avgLength = userMessages.reduce((sum, m) => sum + ((m.message || m.content || '').length), 0) / userMessages.length;
       if (avgLength < 30) {
@@ -92,23 +95,25 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
     return session?.params?.source || 'Прямая ссылка';
   };
 
-  // Расчет длительности
+  // Расчет длительности (uses transcript or transcriptCount from API)
   const getDuration = (result: Result): string => {
-    const transcript = result.transcript || [];
-    if (transcript.length === 0) return '0:00';
+    const count = result.transcript?.length ?? result.transcriptCount ?? 0;
+    if (count === 0) return '0:00';
     
     // Примерная оценка: 5 секунд на сообщение
-    const seconds = transcript.length * 5;
+    const seconds = count * 5;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  // Проверка на прерванное интервью
+  // Проверка на прерванное интервью (uses transcript or userMessageCount from API)
   const isIncomplete = (result: Result, session: Session | undefined): boolean => {
     const questions = session?.params?.questions || [];
-    const userMessages = result.transcript?.filter(t => t.role === 'user') || [];
-    return questions.length > 0 && userMessages.length < questions.length * 0.7; // <70% ответов
+    const userCount = result.transcript
+      ? result.transcript.filter(t => t.role === 'user').length
+      : (result.userMessageCount ?? 0);
+    return questions.length > 0 && userCount < questions.length * 0.7; // <70% ответов
   };
 
   // Фильтрация
@@ -144,7 +149,9 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
       if (sortBy === 'rating') {
         return getNumericRating(b) - getNumericRating(a);
       } else {
-        return new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+        const dateA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const dateB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return dateB - dateA;
       }
     });
 
@@ -174,8 +181,8 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
         r.studentEmail || '',
         rating.toFixed(1),
         statusText,
-        session?.params.position || session?.params.topic || 'AI Интервью',
-        new Date(r.completedAt).toLocaleDateString('ru-RU'),
+        r.position || session?.params?.position || session?.params?.topic || 'AI Интервью',
+        (r.completedAt ? new Date(r.completedAt).toLocaleDateString('ru-RU') : '—'),
         getDuration(r)
       ];
     });
@@ -401,15 +408,15 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
                     {result.studentName}
                   </h3>
                   <p className="text-xs text-gray-600 mb-0.5">
-                    {session?.params.position || 'AI Интервью'}
+                    {result.position || session?.params?.position || 'AI Интервью'}
                   </p>
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-xs text-gray-500">
-                      {new Date(result.completedAt).toLocaleDateString('ru-RU', {
+                      {(result.completedAt ? new Date(result.completedAt).toLocaleDateString('ru-RU', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric'
-                      })}
+                      }) : '—')}
                     </p>
                     <span className="text-gray-300">•</span>
                     <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">

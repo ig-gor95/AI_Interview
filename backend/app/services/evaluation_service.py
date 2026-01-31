@@ -1,9 +1,19 @@
 """Evaluation service coordinating all analyzers"""
 import asyncio
 from typing import List, Dict, Any, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.analyzers.registry import AnalyzerRegistry
 from app.analyzers.base import AnalysisResult
 from app.config import settings
+from app.models.session import (
+    Session,
+    SessionEvaluation,
+    SessionEvaluationStrength,
+    SessionEvaluationImprovement,
+    SessionEvaluationKeyPhrase,
+    SessionEvaluationObservation,
+)
 
 
 class EvaluationService:
@@ -126,4 +136,162 @@ class EvaluationService:
             "details": aggregated_details,
             "recommendations": list(set(all_recommendations)),  # Remove duplicates
         }
+
+
+async def generate_evaluation_from_transcript(
+    session: Session,
+    db: AsyncSession,
+    ai_service: Any,
+) -> Dict[str, Any]:
+    """
+    Generate evaluation from interview transcript using GPT/DeepSeek.
+    Saves to SessionEvaluation and related tables, returns evaluation dict.
+    
+    Args:
+        session: Session with transcript_messages and interview loaded
+        db: Async database session
+        ai_service: AIService instance (openai_service) with analyze_transcript method
+        
+    Returns:
+        Evaluation dict for API response
+    """
+    transcript_messages = sorted(
+        getattr(session, "transcript_messages", None) or [],
+        key=lambda x: getattr(x, "order_index", 0)
+    )
+    if not transcript_messages:
+        raise ValueError("Session has no transcript messages")
+    
+    transcript = [
+        {
+            "role": getattr(m, "role", "unknown"),
+            "message": getattr(m, "message_text", str(m)),
+        }
+        for m in transcript_messages
+    ]
+    
+    interview = getattr(session, "interview", None)
+    session_params = {}
+    if interview:
+        session_params = {
+            "position": getattr(interview, "position", None) or "",
+            "company": getattr(interview, "company", None),
+            "goals": [],
+            "questions": [],
+            "evaluation_criteria": [],
+        }
+        config = getattr(interview, "config", None)
+        if config:
+            goals = getattr(config, "goals", None)
+            session_params["goals"] = goals if isinstance(goals, list) else []
+        questions_rel = getattr(interview, "questions", None) or []
+        parent_qs = [q for q in questions_rel if not getattr(q, "parent_question_id", None)]
+        parent_qs.sort(key=lambda x: getattr(x, "order_index", 0))
+        session_params["questions"] = [getattr(q, "question_text", "") for q in parent_qs]
+    
+    evaluation_criteria = session_params.get("goals", []) or session_params.get("evaluation_criteria", []) or ["communication", "relevance", "clarity"]
+    if isinstance(evaluation_criteria, str):
+        evaluation_criteria = [evaluation_criteria]
+    
+    gpt_result = await ai_service.analyze_transcript(
+        transcript=transcript,
+        session_params=session_params,
+        evaluation_criteria=evaluation_criteria,
+    )
+    
+    score = int(min(100, max(0, gpt_result.get("score", 50))))
+    summary = gpt_result.get("summary") or ""
+    readiness = gpt_result.get("readiness") or ""
+    recommendation = gpt_result.get("recommendation") or ""
+    
+    eval_entity = SessionEvaluation(
+        session_id=session.id,
+        overall_score=score,
+        summary=summary,
+        readiness=readiness,
+        recommendation=recommendation,
+    )
+    db.add(eval_entity)
+    await db.flush()
+    
+    for i, s in enumerate(gpt_result.get("strengths") or []):
+        db.add(SessionEvaluationStrength(
+            evaluation_id=eval_entity.id,
+            strength_text=str(s)[:2000],
+            order_index=i,
+        ))
+    
+    for i, imp in enumerate(gpt_result.get("improvements") or []):
+        db.add(SessionEvaluationImprovement(
+            evaluation_id=eval_entity.id,
+            improvement_text=str(imp)[:2000],
+            order_index=i,
+        ))
+    
+    key_phrases = gpt_result.get("keyPhrases") or {}
+    effective = key_phrases.get("effective") or []
+    to_improve = key_phrases.get("toImprove") or []
+    
+    for i, item in enumerate(effective):
+        d = item if isinstance(item, dict) else {"text": str(item), "note": ""}
+        db.add(SessionEvaluationKeyPhrase(
+            evaluation_id=eval_entity.id,
+            phrase_type="effective",
+            phrase_text=str(d.get("text", d))[:1000],
+            note=str(d.get("note", ""))[:500] if d.get("note") else None,
+            order_index=i,
+        ))
+    
+    for i, item in enumerate(to_improve):
+        d = item if isinstance(item, dict) else {"text": str(item), "note": ""}
+        db.add(SessionEvaluationKeyPhrase(
+            evaluation_id=eval_entity.id,
+            phrase_type="to_improve",
+            phrase_text=str(d.get("text", d))[:1000],
+            note=str(d.get("note", ""))[:500] if d.get("note") else None,
+            order_index=len(effective) + i,
+        ))
+    
+    obs = gpt_result.get("observations") or {}
+    for cat, text in obs.items():
+        if text:
+            db.add(SessionEvaluationObservation(
+                evaluation_id=eval_entity.id,
+                category=str(cat)[:100],
+                observation_text=str(text)[:2000],
+            ))
+    
+    await db.commit()
+    
+    rec_status = "recommended" if score >= 75 else "questionable" if score >= 50 else "not-recommended"
+    
+    strengths_list = gpt_result.get("strengths") or []
+    improvements_list = gpt_result.get("improvements") or []
+    
+    kp_effective = [
+        {"type": "effective", "text": (x.get("text", x) if isinstance(x, dict) else str(x))[:500], "note": (x.get("note", "") if isinstance(x, dict) else "")[:200]}
+        for x in (gpt_result.get("keyPhrases") or {}).get("effective") or []
+    ]
+    kp_to_improve = [
+        {"type": "to_improve", "text": (x.get("text", x) if isinstance(x, dict) else str(x))[:500], "note": (x.get("note", "") if isinstance(x, dict) else "")[:200]}
+        for x in (gpt_result.get("keyPhrases") or {}).get("toImprove") or []
+    ]
+    obs_list = [
+        {"category": str(cat), "text": str(txt)[:500]}
+        for cat, txt in (gpt_result.get("observations") or {}).items()
+        if txt
+    ]
+    
+    return {
+        "id": str(eval_entity.id),
+        "overall_score": eval_entity.overall_score,
+        "summary": eval_entity.summary,
+        "readiness": eval_entity.readiness,
+        "recommendation": eval_entity.recommendation,
+        "strengths": [str(s)[:500] for s in strengths_list],
+        "improvements": [str(i)[:500] for i in improvements_list],
+        "key_phrases": kp_effective + kp_to_improve,
+        "observations": obs_list,
+        "recommendation_status": rec_status,
+    }
 

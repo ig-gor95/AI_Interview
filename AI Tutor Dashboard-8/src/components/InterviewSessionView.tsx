@@ -75,6 +75,45 @@ export function InterviewSessionView() {
   const startTimeRef = useRef<number | null>(null);
   const wsConnectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fillerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fillerAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fillerIndexRef = useRef(0);
+
+  const FILLER_PHRASE_COUNT = 5;
+  const FILLER_DELAY_MS = 3500;
+
+  const stopFillerAudio = () => {
+    if (fillerTimerRef.current) {
+      clearTimeout(fillerTimerRef.current);
+      fillerTimerRef.current = null;
+    }
+    if (fillerAudioRef.current) {
+      fillerAudioRef.current.pause();
+      fillerAudioRef.current = null;
+    }
+  };
+
+  const playFillerAudio = () => {
+    const idx = fillerIndexRef.current % FILLER_PHRASE_COUNT;
+    fillerIndexRef.current = idx + 1;
+    const url = fullAudioUrl(`/api/audio/filler/${idx}`) ?? `${window.location.origin}/api/audio/filler/${idx}`;
+    const audio = new Audio(url);
+    fillerAudioRef.current = audio;
+    audio.play().catch(() => {});
+    audio.onended = () => {
+      fillerAudioRef.current = null;
+      // Don't loop - wait for next delay or response
+    };
+  };
+
+  const startFillerTimer = () => {
+    stopFillerAudio();
+    fillerTimerRef.current = setTimeout(() => {
+      fillerTimerRef.current = null;
+      if (fillerAudioRef.current) return; // Response already arrived
+      playFillerAudio();
+    }, FILLER_DELAY_MS);
+  };
 
   // Load session on mount
   useEffect(() => {
@@ -316,6 +355,7 @@ export function InterviewSessionView() {
       
       case 'message':
         console.log('[Frontend] Message received:', data.role, data.message?.substring(0, 50));
+        stopFillerAudio();
         if (data.role === 'ai') {
           setIsSpeaking(true);
           setIsProcessing(false);
@@ -359,6 +399,23 @@ export function InterviewSessionView() {
             }, intervalMs);
           };
 
+          const interviewComplete = data.metadata?.interviewComplete === true;
+          const onAudioOrTypewriterDone = () => {
+            if (typewriterIntervalRef.current) {
+              clearInterval(typewriterIntervalRef.current);
+              typewriterIntervalRef.current = null;
+            }
+            setVisibleCharCount(fullText.length);
+            setTypingMessageTimestamp(null);
+            setIsSpeaking(false);
+            if (interviewComplete) {
+              handleEndSession();
+            } else {
+              isUserTurnRef.current = true;
+              startTimer();
+            }
+          };
+
           if (newMessage.audioUrl) {
             const audioSrc = newMessage.audioUrl;
             if (typeof window !== 'undefined' && !audioSrc.startsWith('http')) {
@@ -366,50 +423,28 @@ export function InterviewSessionView() {
             }
             const audio = new Audio(audioSrc);
 
-            const enableMicAndCleanup = () => {
-              if (typewriterIntervalRef.current) {
-                clearInterval(typewriterIntervalRef.current);
-                typewriterIntervalRef.current = null;
-              }
-              setVisibleCharCount(fullText.length);
-              setTypingMessageTimestamp(null);
-              setIsSpeaking(false);
-              isUserTurnRef.current = true;
-              startTimer();
-            };
-
             audio.onloadedmetadata = () => {
               const durationSec = audio.duration;
               startTypewriter(durationSec);
               audio.play().catch((err) => {
                 console.warn('[Frontend] Audio play failed (autoplay?), enabling mic:', err);
-                enableMicAndCleanup();
                 startTypewriter(fullText.length / 18);
                 const fallbackMs = Math.max(500, (fullText.length / 18) * 1000);
-                setTimeout(enableMicAndCleanup, fallbackMs);
+                setTimeout(onAudioOrTypewriterDone, fallbackMs);
               });
             };
             audio.load();
 
-            audio.onended = enableMicAndCleanup;
+            audio.onended = onAudioOrTypewriterDone;
 
             audio.onerror = (e) => {
               console.warn('[Frontend] Audio load/play error:', e);
-              enableMicAndCleanup();
+              onAudioOrTypewriterDone();
             };
           } else {
             startTypewriter(fullText.length / 18);
-            setTimeout(() => {
-              if (typewriterIntervalRef.current) {
-                clearInterval(typewriterIntervalRef.current);
-                typewriterIntervalRef.current = null;
-              }
-              setVisibleCharCount(fullText.length);
-              setTypingMessageTimestamp(null);
-              setIsSpeaking(false);
-              isUserTurnRef.current = true;
-              startTimer();
-            }, (fullText.length / 18) * 1000 + 200);
+            const delayMs = (fullText.length / 18) * 1000 + (interviewComplete ? 2000 : 200);
+            setTimeout(onAudioOrTypewriterDone, delayMs);
           }
         }
         break;
@@ -614,6 +649,7 @@ export function InterviewSessionView() {
     setIsProcessing(true);
     isUserTurnRef.current = false; // Пользователь отправил сообщение - останавливаем таймер
     stopTimer();
+    startFillerTimer();
   };
 
   // Toggle listening (microphone) - using Web Speech API
@@ -795,6 +831,7 @@ export function InterviewSessionView() {
   useEffect(() => {
     return () => {
       stopTimer();
+      stopFillerAudio();
       if (wsConnectionTimeoutRef.current) {
         clearTimeout(wsConnectionTimeoutRef.current);
       }

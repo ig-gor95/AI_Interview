@@ -151,6 +151,46 @@ export const resultsAPI = {
   async getResult(id: string) {
     return apiRequest<any>(`/results/${id}`);
   },
+
+  async getStatistics() {
+    return apiRequest<{
+      totalInterviews: number;
+      completedCandidates: number;
+      recommendedPercentage: number;
+    }>('/results/statistics');
+  },
+
+  async getCandidates(params?: {
+    interview_id?: string;
+    status?: 'recommended' | 'questionable' | 'not-recommended';
+    min_rating?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.interview_id) queryParams.append('interview_id', params.interview_id);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.min_rating !== undefined) queryParams.append('min_rating', params.min_rating.toString());
+    
+    const queryString = queryParams.toString();
+    const endpoint = `/results/candidates${queryString ? `?${queryString}` : ''}`;
+    return apiRequest<{
+      results: any[];
+      total: number;
+    }>(endpoint);
+  },
+
+  async getCandidateDetail(sessionId: string) {
+    return apiRequest<{
+      result: any;
+      evaluation: any;
+      interview?: { position?: string; company?: string; questions?: string[] };
+      simulation?: {
+        scenarioDescription?: string;
+        clientRole?: string;
+        dialog?: Array<{ role?: string; message?: string; tone?: string }>;
+        observations?: Array<{ category?: string; text?: string }>;
+      };
+    }>(`/results/candidates/${sessionId}`);
+  },
 };
 
 // Public API (no authentication required)

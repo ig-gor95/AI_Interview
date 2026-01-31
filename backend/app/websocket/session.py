@@ -1012,6 +1012,23 @@ async def _process_user_response(
         if 'qa' in locals() and qa:
             session_state["last_question_qa_id"] = qa.id
     
+    # Check if GPT indicated interview completion (metadata or text pattern)
+    interview_complete = False
+    if gpt_response.metadata:
+        interview_complete = getattr(gpt_response.metadata, "interview_complete", False) or False
+    if not interview_complete:
+        completion_phrases = ["интервью завершено", "интервью завершено.", "на этом интервью завершено"]
+        interview_complete = any(p in (next_question_text or "").lower() for p in completion_phrases)
+
+    metadata_dict = (
+        gpt_response.metadata.model_dump(by_alias=True)
+        if gpt_response.metadata and hasattr(gpt_response.metadata, "model_dump")
+        else (gpt_response.metadata.dict() if gpt_response.metadata else {})
+    )
+    if not isinstance(metadata_dict, dict):
+        metadata_dict = {}
+    metadata_dict["interviewComplete"] = interview_complete
+
     # Send AI response to client
     await ws_manager.send_message(session_id, {
         "type": "message",
@@ -1019,7 +1036,7 @@ async def _process_user_response(
         "message": next_question_text,
         "audio_url": ai_audio_url,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "metadata": gpt_response.metadata.dict() if gpt_response.metadata else None,
+        "metadata": metadata_dict,
         "questionType": next_question_type
     })
 
@@ -1029,7 +1046,7 @@ async def _handle_end_session(
     session: Session,
     db: AsyncSession
 ):
-    """Handle session end"""
+    """Handle session end - mark completed, merge audio, generate summary via GPT, notify client"""
     session.status = SessionStatus.COMPLETED
     session.completed_at = datetime.now(timezone.utc)
     await db.commit()
@@ -1045,6 +1062,37 @@ async def _handle_end_session(
     except Exception as e:
         print(f"[SessionEnd] Error merging audio for session {session_id}: {e}")
         # Don't fail the session end due to audio merge errors
+
+    # Generate evaluation summary via GPT and save to SessionEvaluation
+    try:
+        from app.core import openai_service
+        from app.services.evaluation_service import generate_evaluation_from_transcript
+        from sqlalchemy.orm import selectinload
+
+        result = await db.execute(
+            select(Session)
+            .where(Session.id == session.id)
+            .options(
+                selectinload(Session.transcript_messages),
+                selectinload(Session.interview).selectinload(Interview.config),
+                selectinload(Session.interview).selectinload(Interview.questions)
+            )
+        )
+        session_for_eval = result.scalar_one_or_none()
+        if session_for_eval and session_for_eval.transcript_messages:
+            await generate_evaluation_from_transcript(
+                session=session_for_eval,
+                db=db,
+                ai_service=openai_service,
+            )
+            print(f"[SessionEnd] Evaluation summary generated and saved for session {session_id}")
+        else:
+            print(f"[SessionEnd] No transcript for session {session_id}, skipping evaluation")
+    except Exception as e:
+        print(f"[SessionEnd] Error generating evaluation for session {session_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't fail the session end; summary can be generated on-demand when viewing candidate
 
     await ws_manager.send_message(session_id, {
         "type": "ended",

@@ -57,6 +57,45 @@ async def health():
     return {"status": "healthy"}
 
 
+# Filler phrases for when GPT response is slow (pre-loaded TTS)
+FILLER_PHRASES_RU = [
+    "Спасибо за ответ.",
+    "Ммм…",
+    "Хорошо, тогда такой вопрос…",
+    "Эмммм…",
+    "Понятно, продолжайте.",
+]
+_filler_audio_cache: dict = {}
+
+
+@app.get("/api/audio/filler/{index}")
+async def get_filler_audio(index: int):
+    """Get pre-generated filler audio for when AI response is slow (no auth required)"""
+    from fastapi.responses import Response
+    from fastapi import HTTPException
+    from app.core import tts_service
+
+    if index < 0 or index >= len(FILLER_PHRASES_RU):
+        raise HTTPException(status_code=400, detail="Invalid index")
+    if tts_service is None:
+        raise HTTPException(status_code=503, detail="TTS not available")
+    cache_key = f"filler_{index}_ru"
+    if cache_key not in _filler_audio_cache:
+        try:
+            audio_bytes = await tts_service.text_to_speech(
+                text=FILLER_PHRASES_RU[index],
+                language_code="ru-RU",
+            )
+            _filler_audio_cache[cache_key] = audio_bytes
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return Response(
+        content=_filler_audio_cache[cache_key],
+        media_type="audio/mpeg",
+        headers={"Content-Disposition": "inline"},
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(

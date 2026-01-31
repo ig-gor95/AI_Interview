@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Link as LinkIcon, Calendar, Clock, Target, Copy, Check, BarChart3, Users, MessageSquare, Video, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, SlidersHorizontal, Eye, Search, Download, Star, CheckCircle, XCircle, AlertCircle, Circle, MoreVertical, Mail, Phone } from 'lucide-react';
 import { Session, SessionParams, User } from '@/types';
 import { saveSession, getResultsByOrganizerId } from '@/lib/mockData';
-import { interviewsAPI } from '@/lib/api';
+import { interviewsAPI, resultsAPI } from '@/lib/api';
 import { InterviewForm } from './InterviewForm';
 import { CandidatesTab } from './CandidatesTab';
 import { InterviewLinksManager } from './InterviewLinksManager';
@@ -41,7 +41,68 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     }
     return true;
   });
-  const results = getResultsByOrganizerId(user.id);
+  const [results, setResults] = useState<any[]>([]);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  
+  const [statistics, setStatistics] = useState({
+    totalInterviews: 0,
+    completedCandidates: 0,
+    recommendedPercentage: 0
+  });
+  
+  // Load results and statistics from API
+  useEffect(() => {
+    loadResults();
+    loadStatistics();
+  }, [user.id]);
+  
+  // Reload when switching to candidates tab
+  useEffect(() => {
+    if (activeTab === 'students') {
+      loadResults();
+      loadStatistics();
+    }
+  }, [activeTab]);
+  
+  const loadResults = async () => {
+    try {
+      setIsLoadingResults(true);
+      console.log('[OrganizerDashboard] Loading candidates from API...');
+      const candidatesResponse = await resultsAPI.getCandidates();
+      console.log('[OrganizerDashboard] Received candidates:', candidatesResponse);
+      const candidates = candidatesResponse.results || [];
+      console.log(`[OrganizerDashboard] Setting ${candidates.length} candidates`);
+      setResults(candidates);
+    } catch (error) {
+      console.error('[OrganizerDashboard] Ошибка при загрузке результатов:', error);
+      // Fallback to mockData if API fails
+      const mockResults = getResultsByOrganizerId(user.id);
+      console.log(`[OrganizerDashboard] Fallback to mockData: ${mockResults.length} results`);
+      setResults(mockResults);
+    } finally {
+      setIsLoadingResults(false);
+    }
+  };
+  
+  const loadStatistics = async () => {
+    try {
+      const stats = await resultsAPI.getStatistics();
+      setStatistics(stats);
+    } catch (error) {
+      console.error('Ошибка при загрузке статистики:', error);
+      // Fallback: calculate from results
+      const mockResults = getResultsByOrganizerId(user.id);
+      const ratings = mockResults.map(r => 
+        r.qualityRating || (r.score ? scoreToQualityRating(r.score) : undefined)
+      );
+      const topPercentage = getTopCandidatesPercentage(ratings);
+      setStatistics({
+        totalInterviews: userSessions.length,
+        completedCandidates: mockResults.length,
+        recommendedPercentage: topPercentage
+      });
+    }
+  };
 
   const handleCreateSession = async (params: SessionParams) => {
     try {
@@ -105,7 +166,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               </div>
               <p className="text-sm sm:text-base text-gray-600">Всего интервью</p>
             </div>
-            <p className="text-2xl sm:text-3xl text-gray-900">{userSessions.length}</p>
+              <p className="text-2xl sm:text-3xl text-gray-900">{statistics.totalInterviews || userSessions.length}</p>
           </div>
 
           <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
@@ -117,7 +178,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                 Кандидатов прошли интервью
               </p>
             </div>
-            <p className="text-2xl sm:text-3xl text-gray-900">{results.length}</p>
+            <p className="text-2xl sm:text-3xl text-gray-900">{statistics.completedCandidates}</p>
           </div>
 
           <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200 sm:col-span-2 md:col-span-1">
@@ -132,20 +193,12 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                 </p>
               </div>
             </div>
-            {results.length > 0 ? (() => {
-              // Преобразуем старые баллы в качественную оценку
-              const ratings = results.map(r => 
-                r.qualityRating || (r.score ? scoreToQualityRating(r.score) : undefined)
-              );
-              const topCandidatesPercentage = getTopCandidatesPercentage(ratings);
-              
-              return (
-                <div className="flex items-baseline gap-2">
-                  <p className="text-2xl sm:text-3xl text-gray-900">{topCandidatesPercentage}%</p>
-                  <span className="text-sm text-gray-500">кандидатов</span>
-                </div>
-              );
-            })() : (
+            {statistics.completedCandidates > 0 ? (
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl sm:text-3xl text-gray-900">{statistics.recommendedPercentage}%</p>
+                <span className="text-sm text-gray-500">кандидатов</span>
+              </div>
+            ) : (
               <p className="text-2xl sm:text-3xl text-gray-400">-</p>
             )}
           </div>
@@ -390,11 +443,23 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
         )}
 
         {activeTab === 'students' && (
-          <CandidatesTab
-            results={results}
-            sessions={sessions}
-            onViewEvaluation={onViewEvaluation}
-          />
+          <>
+            {isLoadingResults ? (
+              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <BarChart3 className="w-8 h-8 text-blue-600 animate-pulse" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Загрузка данных...</h3>
+                <p className="text-sm text-gray-600">Получение списка кандидатов</p>
+              </div>
+            ) : (
+              <CandidatesTab
+                results={results}
+                sessions={sessions}
+                onViewEvaluation={onViewEvaluation}
+              />
+            )}
+          </>
         )}
       </div>
       )}

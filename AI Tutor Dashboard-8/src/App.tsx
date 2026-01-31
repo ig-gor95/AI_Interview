@@ -206,17 +206,18 @@ function AppContent() {
     );
   };
 
-  // Evaluation Page Component
+  // Evaluation Page Component - sessionId is the concrete candidate session ID from /evaluation/:sessionId
   const EvaluationPage = () => {
     const { sessionId } = useParams<{ sessionId: string }>();
-    const session = sessionId ? getSessionById(sessionId) : null;
+    const session = sessionId ? getSessionById(sessionId) ?? null : null;
 
-    if (!sessionId || !session) {
+    if (!sessionId) {
       return <Navigate to={user ? '/dashboard' : '/'} replace />;
     }
 
     return (
       <CandidateEvaluation
+        sessionId={sessionId}
         session={session}
         user={user}
         onComplete={handleSessionComplete}

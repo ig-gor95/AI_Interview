@@ -179,6 +179,7 @@ class QuestionMetadata(BaseModel):
     answer_quality: str = Field(alias="answerQuality", default="complete")  # "complete" | "partial" | "insufficient"
     should_move_next: bool = Field(alias="shouldMoveNext", default=False)
     estimated_time_remaining: Optional[int] = Field(None, alias="estimatedTimeRemaining")
+    interview_complete: bool = Field(alias="interviewComplete", default=False)
     
     class Config:
         populate_by_name = True

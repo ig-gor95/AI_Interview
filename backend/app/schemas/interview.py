@@ -10,9 +10,11 @@ class TranscriptMessage(BaseModel):
     role: str  # 'ai' or 'user'
     message: str
     timestamp: datetime
+    audioUrl: Optional[str] = None  # Audio URL for AI messages
     
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class InterviewCreate(BaseModel):

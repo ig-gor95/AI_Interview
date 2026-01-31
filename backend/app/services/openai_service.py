@@ -10,6 +10,20 @@ from app.config import settings
 from app.schemas.session import GPTContextRequest, GPTResponse
 
 
+def _fix_llm_json(text: str) -> str:
+    """Fix common LLM JSON output issues before parsing."""
+    if not text or not text.strip():
+        return text
+    s = text.strip()
+    # Remove markdown code blocks
+    if s.startswith("```"):
+        s = re.sub(r"^```(?:json)?\s*", "", s)
+        s = re.sub(r"\s*```$", "", s)
+    # Remove trailing commas before } or ] (common LLM mistake)
+    s = re.sub(r",\s*([}\]])", r"\1", s)
+    return s
+
+
 class AIService:
     """Сервис для DeepSeek API (чат-модели). TTS не используется — только Google в core."""
 
@@ -438,9 +452,10 @@ Transcript:
                 }
                 return GPTResponse(**fallback_response)
 
-            # Парсим JSON ответ
+            # Парсим JSON ответ (fix common LLM output issues first)
+            fixed_text = _fix_llm_json(response_text)
             try:
-                response_data = json.loads(response_text)
+                response_data = json.loads(fixed_text)
                 print(f"[AI] JSON parsed successfully")
                 
                 # Process metadata to handle None values and type conversions
@@ -480,14 +495,36 @@ Transcript:
                 return result
             except json.JSONDecodeError as e:
                 print(f"[AI] JSON decode error: {e}")
-                print(f"[AI] Response text: {response_text}")
-                # Если JSON невалидный, пытаемся извлечь его
-                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                print(f"[AI] Response text (first 500 chars): {response_text[:500]}")
+                # Extract JSON block and retry with fixes
+                json_match = re.search(r'\{[\s\S]*\}', response_text)
                 if json_match:
-                    response_data = json.loads(json_match.group())
-                    return GPTResponse(**response_data)
-                else:
-                    raise Exception(f"Invalid JSON response from DeepSeek: {response_text}")
+                    extracted = _fix_llm_json(json_match.group())
+                    try:
+                        response_data = json.loads(extracted)
+                        result = GPTResponse(**response_data)
+                        print(f"[AI] JSON parsed from extracted block")
+                        return result
+                    except json.JSONDecodeError:
+                        pass
+                # Fallback: return a safe default so the interview can continue
+                print(f"[AI] Using fallback response due to JSON parse failure")
+                fallback = {
+                    "question": {
+                        "text": "Расскажите о вашем опыте работы по данной специальности.",
+                        "type": "main",
+                        "isClarifying": False,
+                        "isDynamic": False,
+                        "parentSessionQuestionAnswerId": None,
+                    },
+                    "metadata": {
+                        "needsClarification": False,
+                        "answerQuality": "complete",
+                        "shouldMoveNext": True,
+                        "estimatedTimeRemaining": 25,
+                    },
+                }
+                return GPTResponse(**fallback)
                     
         except Exception as e:
             print(f"[AI] Exception in generate_session_question_with_json_mode: {str(e)}")
@@ -651,11 +688,12 @@ Transcript:
     "isDynamic": true/false,
     "parentSessionQuestionAnswerId": "uuid или null"
   },
-  "metadata": {
+    "metadata": {
     "needsClarification": true/false,
     "answerQuality": "complete" | "partial" | "insufficient",
     "shouldMoveNext": true/false,
-    "estimatedTimeRemaining": число (минуты)
+    "estimatedTimeRemaining": число (минуты),
+    "interviewComplete": true/false  // ОБЯЗАТЕЛЬНО true, когда завершаешь интервью (фраза типа "Спасибо за ответы. На этом интервью завершено.")
   },
   "analysis": {
     "keyPoints": ["ключевой момент 1", "ключевой момент 2"],

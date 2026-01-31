@@ -1,37 +1,73 @@
 import { ArrowLeft, Play, FileText, Pause, Volume2, MessageSquare, Phone, User, Bot, CheckCircle2, AlertCircle, XCircle, Square } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Session, User as UserType } from '../types';
-import { getResultsByOrganizerId } from '../lib/mockData';
+import { resultsAPI } from '@/lib/api';
 import { scoreToQualityRating } from '@/lib/qualityRating';
 
 interface Props {
-  session: Session;
+  sessionId: string;
+  session: Session | null;
   user: UserType | null;
   onComplete: () => void;
   onBack: () => void;
 }
 
-export function CandidateEvaluation({ session, user, onComplete, onBack }: Props) {
+const DEFAULT_STRENGTHS = ['Спокойно реагирует на давление', 'Даёт конкретные решения', 'Использует профессиональную лексику'];
+const DEFAULT_IMPROVEMENTS = ['Кратко отвечает, требует уточнений', 'Проверить опыт работы с конфликтами'];
+const DEFAULT_RECOMMENDATIONS = [
+  'Уточнить формат выражения эмпатии в стрессовых ситуациях',
+  'Проверить реальные кейсы из прошлого опыта',
+  'Обсудить ожидания по графику и развитию'
+];
+
+export function CandidateEvaluation({ sessionId, session, user, onComplete, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [checkedRecommendations, setCheckedRecommendations] = useState<Record<string, boolean>>({});
+  const [result, setResult] = useState<any>(null);
+  const [evaluation, setEvaluation] = useState<any>(null);
+  const [interview, setInterview] = useState<any>(null);
+  const [simulation, setSimulation] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const results = user ? getResultsByOrganizerId(user.id) : [];
-  const result = results.find(r => r.sessionId === session.id) || results[0];
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const res = await resultsAPI.getCandidateDetail(sessionId);
+        if (!cancelled) {
+          setResult(res.result);
+          setEvaluation(res.evaluation);
+          setInterview(res.interview);
+          setSimulation(res.simulation ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [sessionId]);
 
   const candidate = {
-    name: result?.studentName || 'Анна Петрова',
-    email: 'anna.petrova@example.com',
-    position: session?.params?.position || session?.params?.topic || 'AI Интервью',
+    name: result?.studentName || 'Кандидат',
+    email: result?.studentEmail || '',
+    position: interview?.position || session?.params?.position || session?.params?.topic || 'AI Интервью',
     date: result?.completedAt ? new Date(result.completedAt).toLocaleDateString('ru-RU', {
       day: 'numeric',
       month: 'long',
       year: 'numeric'
-    }) : '15 января 2026',
-    duration: '8 мин 42 сек',
+    }) : '—',
+    duration: result?.transcript?.length ? `${Math.max(1, Math.floor((result.transcript.length * 5) / 60))} мин` : '—',
   };
 
-  // Конвертация в числовой рейтинг 0-10
   const qualityRating = result?.qualityRating || (result?.score ? scoreToQualityRating(result.score) : 'suitable');
   const numericRating = {
     outstanding: 9.2,
@@ -40,7 +76,6 @@ export function CandidateEvaluation({ session, user, onComplete, onBack }: Props
     suitable: 4.5
   }[qualityRating] || 5.0;
 
-  // 3 статуса (строго по ТЗ)
   const getInterviewStatus = (rating: number): 'recommended' | 'needs-clarification' | 'not-recommended' => {
     if (rating >= 7.5) return 'recommended';
     if (rating >= 5.0) return 'needs-clarification';
@@ -75,124 +110,62 @@ export function CandidateEvaluation({ session, user, onComplete, onBack }: Props
 
   const StatusIcon = statusConfig.icon;
 
-  // Короткий summary (≤350 символов)
-  const summary = interviewStatus === 'recommended'
-    ? 'Кандидат уверенно справился с типовыми клиентскими ситуациями. Коммуникация понятная, стресс выдерживает. Есть нюансы в выражении эмпатии — рекомендуется уточнить на личной встрече.'
-    : interviewStatus === 'needs-clarification'
-    ? 'Кандидат показал базовые навыки работы с клиентами. Ответы иногда краткие, требуют уточнений. Рекомендуется дополнительная проверка опыта и навыков эмпатии на следующем этапе.'
-    : 'Кандидат демонстрирует недостаточный уровень коммуникации для данной роли. Ответы несвязные, сложности с формулировками. Рекомендуется рассмотреть другие кандидатуры или предложить обучение.';
+  const summary = evaluation?.summary || (
+    interviewStatus === 'recommended'
+      ? 'Кандидат уверенно справился с типовыми клиентскими ситуациями.'
+      : interviewStatus === 'needs-clarification'
+      ? 'Кандидат показал базовые навыки работы с клиентами.'
+      : 'Кандидат демонстрирует недостаточный уровень коммуникации для данной роли.'
+  );
 
   const transcript = result?.transcript || [];
 
-  // Ключевые сигналы (вместо сильных сторон/зон внимания)
   const keySignals = {
-    confirmed: interviewStatus === 'recommended' ? [
-      'Спокойно реагирует на давление',
-      'Даёт конкретные решения',
-      'Использует профессиональную лексику',
-      'Приводит примеры из опыта'
-    ] : interviewStatus === 'needs-clarification' ? [
-      'Понимает суть вопросов',
-      'Старается найти решение',
-      'Не показывает агрессии'
-    ] : [
-      'Проходит интервью до конца',
-      'Отвечает на вопросы'
-    ],
-    attention: interviewStatus === 'recommended' ? [
-      'Иногда переходит к процессу без эмпатии',
-      'В первой реплике пропустил выражение сочувствия'
-    ] : interviewStatus === 'needs-clarification' ? [
-      'Кратко отвечает, требует уточнений',
-      'Не всегда приводит конкретные примеры',
-      'Проверить опыт работы с конфликтами'
-    ] : [
-      'Несвязная речь',
-      'Уходит от прямых ответов',
-      'Сложности с формулировками',
-      'Низкая стрессоустойчивость'
-    ]
+    confirmed: (evaluation?.strengths?.length ? evaluation.strengths : DEFAULT_STRENGTHS) as string[],
+    attention: (evaluation?.improvements?.length ? evaluation.improvements : DEFAULT_IMPROVEMENTS) as string[],
   };
 
-  // Рекомендации к проверке (чекбоксы)
-  const recommendationsToCheck = interviewStatus === 'recommended' ? [
-    'Уточнить формат выражения эмпатии в стрессовых ситуациях',
-    'Проверить реальные кейсы из прошлого опыта',
-    'Обсудить ожидания по графику и развитию'
-  ] : interviewStatus === 'needs-clarification' ? [
-    'Уточнить опыт работы в похожих ситуациях',
-    'Проверить готовность к обучению',
-    'Обсудить конкретные примеры решения проблем',
-    'Выявить мотивацию и долгосрочные планы'
-  ] : [
-    'Оценить возможность базового обучения',
-    'Рассмотреть альтернативные позиции',
-    'Проверить мотивацию к работе в данной сфере'
-  ];
+  const recommendationsToCheck = evaluation?.improvements?.length
+    ? [...evaluation.improvements, ...DEFAULT_RECOMMENDATIONS].slice(0, 5)
+    : DEFAULT_RECOMMENDATIONS;
 
-  // Базовые вопросы с интерпретацией (1 строка)
-  const questions = session?.params?.questions || [];
-  const basicQuestions = (questions.length > 0 ? questions : [
-    'Расскажите, где вы живете и как далеко от нашего офиса?',
-    'Почему вы хотите работать именно у нас?',
-    'Какой у вас опыт работы с клиентами?',
-    'Какие ваши сильные стороны?',
-    'Какой график работы вам подходит?',
-  ]).map((q, idx) => {
-    const mockAnswers = [
-      { 
-        text: 'Живу в центре города, 15 минут от офиса. Готова выходить на работу в любое время.', 
-        interpretation: '✓ Конкретный ответ, указаны детали и готовность'
-      },
-      { 
-        text: 'Ваша компания имеет отличную репутацию, и я хочу развиваться в сфере обслуживания клиентов.', 
-        interpretation: '✓ Показывает интерес к компании и области развития'
-      },
-      { 
-        text: 'Работала официанткой в кафе год, там научилась общаться с разными типами посетителей.', 
-        interpretation: '✓ Приводит релевантный опыт с конкретными примерами'
-      },
-      { 
-        text: 'Я коммуникабельная, стрессоустойчивая и быстро обучаюсь новому.', 
-        interpretation: '⚠️ Перечисляет качества без подтверждающих примеров'
-      },
-      { 
-        text: 'Готова начать работу со следующей недели, график устраивает.', 
-        interpretation: '⚠️ Ответ краткий, можно уточнить детали графика'
-      },
-    ];
-    
-    const answer = mockAnswers[idx % mockAnswers.length];
-    return {
-      question: typeof q === 'string' ? q : String(q),
-      answer: answer.text,
-      interpretation: answer.interpretation,
-    };
-  });
+  // Строим Q&A из транскрипта: пара AI-вопрос → следующий ответ пользователя
+  const basicQuestions = transcript
+    .reduce<Array<{ question: string; answer: string }>>((acc, msg: any, i) => {
+      const text = msg.message ?? msg.content ?? '';
+      if (msg.role === 'ai' && text) {
+        const nextUser = transcript[i + 1];
+        const answer = nextUser?.role === 'user' ? (nextUser.message ?? nextUser.content ?? '—') : '—';
+        acc.push({ question: text, answer });
+      }
+      return acc;
+    }, [])
+    .map((pair) => {
+      const keyPhrase = evaluation?.key_phrases?.find(
+        (kp: { text?: string }) => pair.answer && kp.text && pair.answer.trim().toLowerCase() === kp.text.trim().toLowerCase()
+      );
+      const note = keyPhrase?.note;
+      const interpretation = note
+        ? (keyPhrase?.type === 'effective' ? '✓ ' : '⚠ ') + note
+        : '';
+      return { ...pair, interpretation };
+    });
 
-  // Аналитика по стилю речи (без процентов)
+  // Аналитика по стилю речи — из evaluation.observations или по рейтингу
+  const observations = evaluation?.observations || [];
+  const hasObservations = Array.isArray(observations) && observations.length > 0;
+  const fallbackLevel = interviewStatus === 'recommended' ? 'высокая' : interviewStatus === 'needs-clarification' ? 'средняя' : 'низкая';
   const speechAnalysis = {
-    detail: interviewStatus === 'recommended' ? 'высокая' : interviewStatus === 'needs-clarification' ? 'средняя' : 'низкая',
-    structure: interviewStatus === 'recommended' ? 'высокая' : interviewStatus === 'needs-clarification' ? 'средняя' : 'низкая',
-    relevance: interviewStatus === 'recommended' ? 'высокая' : interviewStatus === 'needs-clarification' ? 'средняя' : 'низкая',
+    detail: fallbackLevel,
+    structure: fallbackLevel,
+    relevance: fallbackLevel,
   };
 
-  // Симуляция с клиентом
-  const simulationScenario = {
-    dialog: [
-      { role: 'ai', tone: 'aggressive', message: 'Это просто безобразие! Я жду свой заказ уже 40 минут! Вы вообще работать умеете?' },
-      { role: 'user', message: 'Извините, пожалуйста, за ожидание. Сейчас проверю статус вашего заказа. Могу я узнать номер заказа?' },
-      { role: 'ai', tone: 'aggressive', message: 'Какой номер? Вы что, издеваетесь? Я же говорю - жду 40 минут!' },
-      { role: 'user', message: 'Понимаю ваше недовольство. Давайте я уточню информацию у кухни и сразу сообщу вам точное время. Могу предложить напиток за счет заведения, пока ожидаете.' },
-      { role: 'ai', tone: 'calm', message: 'Ну ладно... Давайте кофе тогда. Но это не должно повторяться!' },
-      { role: 'user', message: 'Конечно, я передам информацию менеджеру. Спасибо за понимание, ваш кофе будет через минуту.' },
-    ],
-    summary: [
-      { type: 'positive', text: 'Сохранил спокойствие' },
-      { type: 'positive', text: 'Предложил компенсацию' },
-      { type: 'warning', text: 'В начале не хватило эмпатии' },
-    ]
-  };
+  // Симуляция — из API (simulation) или пусто
+  const simulationDialog = simulation?.dialog || [];
+  const simulationSummary = simulation?.observations || [];
+  const simulationDescription = simulation?.scenarioDescription || 'AI сыграл роль клиента в стрессовой ситуации';
+  const simulationClientRole = simulation?.clientRole || 'недовольный клиент';
 
   const toggleRecommendation = (rec: string) => {
     setCheckedRecommendations(prev => ({
@@ -200,6 +173,33 @@ export function CandidateEvaluation({ session, user, onComplete, onBack }: Props
       [rec]: !prev[rec]
     }));
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Загрузка результатов интервью...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={onBack}
+            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+          >
+            Назад к списку
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -396,96 +396,108 @@ export function CandidateEvaluation({ session, user, onComplete, onBack }: Props
         <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-5">Аналитика по стилю речи</h2>
           
-          <div className="grid sm:grid-cols-3 gap-4 mb-4">
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-xs text-gray-600 mb-2">Детальность</p>
-              <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.detail}</p>
+          {hasObservations ? (
+            <div className="space-y-4">
+              {observations.map((obs: { category?: string; text?: string }, i: number) => (
+                <div key={i} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <p className="text-xs text-gray-600 mb-2 capitalize">{obs.category || 'Наблюдение'}</p>
+                  <p className="text-sm text-gray-900">{obs.text || '—'}</p>
+                </div>
+              ))}
             </div>
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-xs text-gray-600 mb-2">Структурированность</p>
-              <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.structure}</p>
+          ) : (
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs text-gray-600 mb-2">Детальность</p>
+                <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.detail}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs text-gray-600 mb-2">Структурированность</p>
+                <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.structure}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <p className="text-xs text-gray-600 mb-2">Релевантность</p>
+                <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.relevance}</p>
+              </div>
             </div>
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <p className="text-xs text-gray-600 mb-2">Релевантность</p>
-              <p className="text-lg font-semibold text-gray-900 capitalize">{speechAnalysis.relevance}</p>
-            </div>
-          </div>
+          )}
 
-          <p className="text-xs text-gray-500 italic">
+          <p className="text-xs text-gray-500 italic mt-4">
             Оценка дана относительно типовых ответов на эту роль
           </p>
         </div>
 
         {/* ========== 6. СИМУЛЯЦИЯ РЕАЛЬНОЙ СИТУАЦИИ ========== */}
         <div className="bg-white rounded-xl border-2 border-purple-200 p-6 sm:p-8">
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-5">
-            <p className="text-sm font-semibold text-purple-900">
-              💬 Смоделирована реальная стрессовая ситуация с клиентом
-            </p>
-            <p className="text-xs text-purple-700 mt-1">
-              AI сыграл роль агрессивного клиента, недовольного долгим ожиданием
-            </p>
-          </div>
+          {simulationDialog.length > 0 ? (
+            <>
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-5">
+                <p className="text-sm font-semibold text-purple-900">
+                  💬 Смоделирована реальная стрессовая ситуация с клиентом
+                </p>
+                <p className="text-xs text-purple-700 mt-1">
+                  {simulationDescription}. Роль клиента: {simulationClientRole}.
+                </p>
+              </div>
 
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Диалог с клиентом</h2>
-          
-          {/* Диалог */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
-            <div className="space-y-3">
-              {simulationScenario.dialog.map((msg, msgIdx) => (
-                <div key={msgIdx} className={`${msg.role === 'user' ? 'ml-6' : ''}`}>
-                  <div className="flex items-start gap-2 mb-1">
-                    {msg.role === 'ai' ? (
-                      <>
-                        <Bot className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-purple-700">AI (клиент)</span>
-                          {msg.tone === 'aggressive' && (
-                            <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded font-medium">
-                              агрессивный
-                            </span>
-                          )}
-                          {msg.tone === 'calm' && (
-                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">
-                              спокойный
-                            </span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <User className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span className="text-xs font-medium text-green-700">{candidate.name}</span>
-                      </>
-                    )}
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Диалог с клиентом</h2>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-5">
+                <div className="space-y-3">
+                  {simulationDialog.map((msg: { role?: string; message?: string; tone?: string }, msgIdx: number) => (
+                    <div key={msgIdx} className={msg.role === 'user' ? 'ml-6' : ''}>
+                      <div className="flex items-start gap-2 mb-1">
+                        {msg.role === 'ai' ? (
+                          <>
+                            <Bot className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-purple-700">AI (клиент)</span>
+                              {msg.tone === 'aggressive' && (
+                                <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded font-medium">агрессивный</span>
+                              )}
+                              {msg.tone === 'calm' && (
+                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">спокойный</span>
+                              )}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <User className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                            <span className="text-xs font-medium text-green-700">{candidate.name}</span>
+                          </>
+                        )}
+                      </div>
+                      <p className={`text-sm ml-6 ${msg.role === 'ai' ? 'text-gray-700' : 'text-gray-900 font-medium'}`}>
+                        {msg.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {simulationSummary.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Итог симуляции:</h3>
+                  <div className="space-y-2">
+                    {simulationSummary.map((obs: { category?: string; text?: string }, i: number) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <span className="text-yellow-600 text-sm">⚠</span>
+                        <span className="text-sm text-gray-700">
+                          <span className="font-medium capitalize">{obs.category}: </span>{obs.text}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <p className={`text-sm ml-6 ${msg.role === 'ai' ? 'text-gray-700' : 'text-gray-900 font-medium'}`}>
-                    {msg.message}
-                  </p>
                 </div>
-              ))}
+              )}
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500">Симуляция в рамках этого интервью не проводилась</p>
             </div>
-          </div>
+          )}
 
-          {/* Короткий итог */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mb-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Итог симуляции:</h3>
-            <div className="space-y-2">
-              {simulationScenario.summary.map((item, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  {item.type === 'positive' ? (
-                    <span className="text-green-600 text-sm">✔</span>
-                  ) : (
-                    <span className="text-yellow-600 text-sm">⚠</span>
-                  )}
-                  <span className="text-sm text-gray-700">{item.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Disclaimer */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
             <p className="text-xs text-amber-900">
               ⚠️ <span className="font-semibold">Интерпретация дана на основе речевых паттернов</span>, не заменяет оценку руководителя
             </p>
