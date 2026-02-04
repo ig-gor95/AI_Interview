@@ -292,32 +292,23 @@ async def handle_session_websocket(
                 # Если транскрипт пустой, значит приветствие еще не было отправлено
                 # Автоматически отправляем приветствие
                 if not transcript_messages:
-                    print(f"[handle_session_websocket] Empty transcript, calling _handle_start_session for session {session_id}")
                     try:
                         await _handle_start_session(
                             session_id, session, interview, db, audio_service
                         )
-                        print(f"[handle_session_websocket] _handle_start_session completed for session {session_id}, entering main message loop")
                     except Exception as e:
-                        print(f"[handle_session_websocket] ERROR in _handle_start_session: {e}")
                         import traceback
                         traceback.print_exc()
                         # Try to send error to client, but don't fail if connection is closed
                         try:
-                            # Check if connection still exists before sending
                             if session_id in ws_manager.active_connections:
                                 await ws_manager.send_message(session_id, {
                                     "type": "error",
                                     "message": f"Ошибка при генерации приветствия: {str(e)}"
                                 })
-                            else:
-                                print(f"[handle_session_websocket] Connection already closed, skipping error message")
-                        except Exception as send_error:
-                            print(f"[handle_session_websocket] Failed to send error message (connection may be closed): {send_error}")
+                        except Exception:
+                            pass
                         # Continue to main loop even if greeting failed
-                        print(f"[handle_session_websocket] Continuing to main message loop despite error")
-                else:
-                    print(f"[handle_session_websocket] Transcript has {len(transcript_messages)} messages, not calling _handle_start_session, entering main message loop")
             else:
                 # Новая сессия
                 try:
@@ -331,30 +322,20 @@ async def handle_session_websocket(
                     print(f"Error sending welcome message: {e}")
             
             # Main message loop
-            print(f"[handle_session_websocket] Entering main message loop for session {session_id}")
             while True:
                 try:
-                    # Check websocket connection state
                     if session_id in ws_manager.active_connections:
                         ws = ws_manager.active_connections[session_id]
-                        print(f"[handle_session_websocket] WebSocket state: {ws.client_state.name}, loop iteration starting")
                     else:
-                        print(f"[handle_session_websocket] ERROR: No active connection for session {session_id} in main loop")
                         break
 
-                    # Receive message
-                    print(f"[handle_session_websocket] Waiting for message from client...")
                     data = await ws_manager.receive_message(session_id)
-                    print(f"[handle_session_websocket] Message received, type: {data.get('type')}, full data keys: {list(data.keys()) if isinstance(data, dict) else 'not dict'}")
-
                     message_type = data.get("type", "unknown")
                     
                     if message_type == "start":
-                        print(f"[handle_session_websocket] Handling 'start' message")
                         await _handle_start_session(
                             session_id, session, interview, db, audio_service
                         )
-                        print(f"[handle_session_websocket] 'start' message handled, continuing to wait for next message")
                     
                     elif message_type == "text":
                         await _handle_text_message(
@@ -373,16 +354,11 @@ async def handle_session_websocket(
                             "message": f"Unknown message type: {message_type}"
                         })
                         
-                except WebSocketDisconnect as e:
-                    print(f"[handle_session_websocket] WebSocket disconnected for session {session_id}: {e}")
+                except WebSocketDisconnect:
                     break
                 except ValueError as e:
-                    # ValueError from receive_message means no active connection
                     if "No active connection" in str(e):
-                        print(f"[handle_session_websocket] No active connection for session {session_id}, exiting loop")
                         break
-                    # Other ValueError - try to send error if connection is still active
-                    print(f"[handle_session_websocket] ValueError handling message: {e}")
                     import traceback
                     traceback.print_exc()
                     if session_id in ws_manager.active_connections:
@@ -405,19 +381,14 @@ async def handle_session_websocket(
                         isinstance(e, (WebSocketDisconnect, ConnectionClosedError))
                     )
                     
-                    print(f"[handle_session_websocket] ERROR handling message: {e}")
                     import traceback
                     traceback.print_exc()
                     
-                    # If it's a connection error, don't try to send error message - just exit
                     if is_connection_error:
-                        print(f"[handle_session_websocket] Connection error detected, exiting loop without sending error message")
                         break
                     
-                    # For non-connection errors, try to send error message if connection is still active
                     if session_id in ws_manager.active_connections:
                         try:
-                            # Check connection state before sending
                             ws = ws_manager.active_connections[session_id]
                             if ws.client_state.name == "CONNECTED":
                                 await ws_manager.send_message(session_id, {
@@ -425,18 +396,14 @@ async def handle_session_websocket(
                                     "message": str(e)
                                 })
                             else:
-                                print(f"[handle_session_websocket] Connection not in CONNECTED state ({ws.client_state.name}), cannot send error message")
                                 break
-                        except (WebSocketDisconnect, ConnectionClosedError) as send_error:
-                            print(f"[handle_session_websocket] Connection closed while sending error message: {send_error}")
+                        except (WebSocketDisconnect, ConnectionClosedError):
                             break
                         except Exception as send_error:
                             error_str_send = str(send_error).lower()
                             if "closed" in error_str_send or "disconnect" in error_str_send:
-                                print(f"[handle_session_websocket] Connection closed during error send: {send_error}")
                                 break
                     else:
-                        print(f"[handle_session_websocket] Connection already closed, cannot send error message")
                         break
         
         except WebSocketDisconnect:
@@ -959,6 +926,17 @@ async def _process_user_response(
     # So we save the current QA (last question + current answer) now
     # And save next QA (next question + empty answer) after user responds
     
+    # Если все вопросы заданы, но GPT не завершил интервью — подставляем завершающую фразу до генерации аудио
+    progress = context.question_progress
+    all_questions_asked = progress.current_question_index >= progress.total_questions
+    if all_questions_asked:
+        completion_in_text = any(
+            p in (next_question_text or "").lower()
+            for p in ["спасибо", "завершено", "скрининг-собеседование завершено"]
+        )
+        if not completion_in_text:
+            next_question_text = "Спасибо за ваши ответы. На этом скрининг-собеседование завершено. Мы свяжемся с вами в ближайшее время."
+    
     # Generate audio for AI response
     ai_audio_url = None
     if tts_service is not None:
@@ -1029,6 +1007,12 @@ async def _process_user_response(
         metadata_dict = {}
     metadata_dict["interviewComplete"] = interview_complete
 
+    # Явная проверка: если все вопросы заданы, принудительно помечаем интервью завершённым
+    if all_questions_asked and not interview_complete:
+        print("[Session] All questions asked but GPT didn't complete. Forcing completion.")
+        interview_complete = True
+        metadata_dict["interviewComplete"] = True
+
     # Send AI response to client
     await ws_manager.send_message(session_id, {
         "type": "message",
@@ -1063,42 +1047,84 @@ async def _handle_end_session(
         print(f"[SessionEnd] Error merging audio for session {session_id}: {e}")
         # Don't fail the session end due to audio merge errors
 
-    # Generate evaluation summary via GPT and save to SessionEvaluation
-    try:
-        from app.core import openai_service
-        from app.services.evaluation_service import generate_evaluation_from_transcript
-        from sqlalchemy.orm import selectinload
-
-        result = await db.execute(
-            select(Session)
-            .where(Session.id == session.id)
-            .options(
-                selectinload(Session.transcript_messages),
-                selectinload(Session.interview).selectinload(Interview.config),
-                selectinload(Session.interview).selectinload(Interview.questions)
-            )
-        )
-        session_for_eval = result.scalar_one_or_none()
-        if session_for_eval and session_for_eval.transcript_messages:
-            await generate_evaluation_from_transcript(
-                session=session_for_eval,
-                db=db,
-                ai_service=openai_service,
-            )
-            print(f"[SessionEnd] Evaluation summary generated and saved for session {session_id}")
-        else:
-            print(f"[SessionEnd] No transcript for session {session_id}, skipping evaluation")
-    except Exception as e:
-        print(f"[SessionEnd] Error generating evaluation for session {session_id}: {e}")
-        import traceback
-        traceback.print_exc()
-        # Don't fail the session end; summary can be generated on-demand when viewing candidate
+    # Запустить генерацию оценки в фоне (не блокируем завершение сессии)
+    asyncio.create_task(_generate_evaluation_background(str(session.id)))
 
     await ws_manager.send_message(session_id, {
         "type": "ended",
         "message": "Интервью завершено",
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
+
+
+async def _generate_evaluation_background(session_id: str):
+    """Фоновая задача для генерации оценки через GPT (не блокирует завершение сессии)"""
+    from app.database import AsyncSessionLocal
+    from app.core import openai_service
+    from app.services.evaluation_service import generate_evaluation_from_transcript
+    from sqlalchemy.orm import selectinload
+    from sqlalchemy import select
+    
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            result = await bg_db.execute(
+                select(Session)
+                .where(Session.id == uuid.UUID(session_id))
+                .options(
+                    selectinload(Session.transcript_messages),
+                    selectinload(Session.interview).selectinload(Interview.config),
+                    selectinload(Session.interview).selectinload(Interview.questions),
+                    selectinload(Session.interview).selectinload(Interview.evaluation_criteria)
+                )
+            )
+            session_for_eval = result.scalar_one_or_none()
+            if not session_for_eval:
+                print(f"[SessionEnd] Session {session_id} not found, skipping evaluation")
+                return
+            
+            # Явно загрузить все relationships в память сразу после запроса, чтобы избежать lazy loading
+            # Это критически важно для предотвращения ошибки "greenlet_spawn has not been called"
+            try:
+                # Явно обратиться к relationships, чтобы они были загружены в память
+                # Это должно быть сделано в том же async контексте, где выполнен запрос
+                transcript_messages_list = session_for_eval.transcript_messages
+                if not transcript_messages_list:
+                    print(f"[SessionEnd] No transcript for session {session_id}, skipping evaluation")
+                    return
+                
+                # Преобразовать в список, чтобы загрузить все элементы в память
+                transcript_messages = list(transcript_messages_list)
+                
+                # Явно загрузить все данные интервью в память
+                interview = session_for_eval.interview
+                if interview:
+                    # Явно обратиться к relationships, чтобы они были загружены в память
+                    config = interview.config
+                    questions_list = list(interview.questions or [])
+                    criteria_list = list(interview.evaluation_criteria or [])
+                    # Убедиться, что все данные загружены, обратившись к их атрибутам
+                    for q in questions_list:
+                        _ = q.question_text
+                    for c in criteria_list:
+                        _ = c.criterion_name
+                
+                # Теперь все данные загружены в память, можно безопасно использовать объект
+                await generate_evaluation_from_transcript(
+                    session=session_for_eval,
+                    db=bg_db,
+                    ai_service=openai_service,
+                )
+            except Exception as eval_err:
+                # Если произошла ошибка при загрузке данных, логируем и пропускаем
+                print(f"[SessionEnd] Error loading session data for evaluation: {eval_err}")
+                import traceback
+                traceback.print_exc()
+                raise
+            print(f"[SessionEnd] Background evaluation generated for session {session_id}")
+        except Exception as e:
+            print(f"[SessionEnd] Error in background evaluation for session {session_id}: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 async def _build_gpt_context(

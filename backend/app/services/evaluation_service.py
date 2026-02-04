@@ -155,41 +155,104 @@ async def generate_evaluation_from_transcript(
     Returns:
         Evaluation dict for API response
     """
+    # Извлечь session_id сразу, чтобы избежать проблем с lazy loading
+    try:
+        session_id = session.id
+    except AttributeError:
+        raise ValueError("Session has no ID")
+    
+    # Извлечь transcript_messages - использовать прямой доступ к атрибуту
+    try:
+        transcript_messages_list = list(session.transcript_messages) if session.transcript_messages else []
+    except AttributeError:
+        transcript_messages_list = []
+    
     transcript_messages = sorted(
-        getattr(session, "transcript_messages", None) or [],
-        key=lambda x: getattr(x, "order_index", 0)
+        transcript_messages_list,
+        key=lambda x: getattr(x, 'order_index', 0)
     )
     if not transcript_messages:
         raise ValueError("Session has no transcript messages")
     
-    transcript = [
-        {
-            "role": getattr(m, "role", "unknown"),
-            "message": getattr(m, "message_text", str(m)),
-        }
-        for m in transcript_messages
-    ]
+    # Извлечь данные в простые структуры, избегая lazy loading
+    transcript = []
+    for m in transcript_messages:
+        try:
+            transcript.append({
+                "role": getattr(m, 'role', 'unknown'),
+                "message": getattr(m, 'message_text', str(m)),
+            })
+        except Exception:
+            continue
     
-    interview = getattr(session, "interview", None)
+    # Извлечь данные интервью в простые структуры
+    try:
+        interview = session.interview
+    except AttributeError:
+        interview = None
+    
     session_params = {}
+    criteria_from_template = []
+    
     if interview:
+        try:
+            position = getattr(interview, 'position', None) or ""
+            company = getattr(interview, 'company', None)
+        except Exception:
+            position = ""
+            company = None
+        
         session_params = {
-            "position": getattr(interview, "position", None) or "",
-            "company": getattr(interview, "company", None),
+            "position": position,
+            "company": company,
             "goals": [],
             "questions": [],
             "evaluation_criteria": [],
         }
-        config = getattr(interview, "config", None)
+        
+        try:
+            config = interview.config
+        except AttributeError:
+            config = None
+        
         if config:
-            goals = getattr(config, "goals", None)
-            session_params["goals"] = goals if isinstance(goals, list) else []
-        questions_rel = getattr(interview, "questions", None) or []
-        parent_qs = [q for q in questions_rel if not getattr(q, "parent_question_id", None)]
-        parent_qs.sort(key=lambda x: getattr(x, "order_index", 0))
-        session_params["questions"] = [getattr(q, "question_text", "") for q in parent_qs]
+            try:
+                goals = getattr(config, 'goals', None)
+                session_params["goals"] = goals if isinstance(goals, list) else []
+                session_params["focus_areas"] = getattr(config, 'focus_areas', None) or []
+                session_params["expected_knowledge"] = getattr(config, 'expected_knowledge', None) or []
+                session_params["role_context"] = getattr(config, 'role_context', None) or ""
+            except Exception:
+                pass
+        
+        # Извлечь вопросы
+        try:
+            questions_rel = interview.questions
+            questions_list = list(questions_rel) if questions_rel else []
+        except (AttributeError, Exception):
+            questions_list = []
+        
+        parent_qs = [q for q in questions_list if not getattr(q, 'parent_question_id', None)]
+        parent_qs.sort(key=lambda x: getattr(x, 'order_index', 0))
+        session_params["questions"] = [getattr(q, 'question_text', '') for q in parent_qs]
+        
+        # Извлечь критерии оценки из шаблона интервью
+        try:
+            criteria_rel = interview.evaluation_criteria
+            criteria_objs = list(criteria_rel) if criteria_rel else []
+        except (AttributeError, Exception):
+            criteria_objs = []
+        
+        if criteria_objs:
+            criteria_with_index = [
+                (getattr(c, 'criterion_name', str(c)), getattr(c, 'order_index', 0)) 
+                for c in criteria_objs
+            ]
+            criteria_with_index.sort(key=lambda x: x[1])
+            criteria_from_template = [name for name, _ in criteria_with_index]
     
-    evaluation_criteria = session_params.get("goals", []) or session_params.get("evaluation_criteria", []) or ["communication", "relevance", "clarity"]
+    # Использовать критерии из шаблона или дефолтные
+    evaluation_criteria = criteria_from_template if criteria_from_template else ["communication", "relevance", "clarity", "professionalism"]
     if isinstance(evaluation_criteria, str):
         evaluation_criteria = [evaluation_criteria]
     
@@ -205,7 +268,7 @@ async def generate_evaluation_from_transcript(
     recommendation = gpt_result.get("recommendation") or ""
     
     eval_entity = SessionEvaluation(
-        session_id=session.id,
+        session_id=session_id,
         overall_score=score,
         summary=summary,
         readiness=readiness,
@@ -261,6 +324,23 @@ async def generate_evaluation_from_transcript(
                 observation_text=str(text)[:2000],
             ))
     
+    # Сохранить оценки по критериям (из criterionScores)
+    criterion_scores = gpt_result.get("criterionScores") or {}
+    for criterion_name, score_data in criterion_scores.items():
+        if isinstance(score_data, dict):
+            score_val = score_data.get("score", 0)
+            justification = score_data.get("justification", "")
+            obs_text = f"Score: {score_val}. {justification}"[:2000]
+        else:
+            # Fallback: если пришло просто число
+            score_val = int(score_data) if isinstance(score_data, (int, float)) else 0
+            obs_text = f"Score: {score_val}"[:2000]
+        db.add(SessionEvaluationObservation(
+            evaluation_id=eval_entity.id,
+            category=f"criterion_{criterion_name}"[:100],
+            observation_text=obs_text,
+        ))
+    
     await db.commit()
     
     rec_status = "recommended" if score >= 75 else "questionable" if score >= 50 else "not-recommended"
@@ -282,6 +362,23 @@ async def generate_evaluation_from_transcript(
         if txt
     ]
     
+    # Добавить оценки по критериям в ответ
+    criterion_scores_list = []
+    criterion_scores_raw = gpt_result.get("criterionScores") or {}
+    for criterion_name, score_data in criterion_scores_raw.items():
+        if isinstance(score_data, dict):
+            criterion_scores_list.append({
+                "criterion": criterion_name,
+                "score": int(score_data.get("score", 0)),
+                "justification": str(score_data.get("justification", ""))[:500]
+            })
+        else:
+            criterion_scores_list.append({
+                "criterion": criterion_name,
+                "score": int(score_data) if isinstance(score_data, (int, float)) else 0,
+                "justification": ""
+            })
+    
     return {
         "id": str(eval_entity.id),
         "overall_score": eval_entity.overall_score,
@@ -292,6 +389,7 @@ async def generate_evaluation_from_transcript(
         "improvements": [str(i)[:500] for i in improvements_list],
         "key_phrases": kp_effective + kp_to_improve,
         "observations": obs_list,
+        "criterion_scores": criterion_scores_list,
         "recommendation_status": rec_status,
     }
 

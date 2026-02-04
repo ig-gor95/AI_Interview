@@ -75,9 +75,14 @@ export function InterviewSessionView() {
   const startTimeRef = useRef<number | null>(null);
   const wsConnectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const speechPauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const userRequestedStopRef = useRef(false); // true только когда пользователь нажал «Стоп»
+  const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Таймер для автоматической остановки при молчании
+  const lastSpeechActivityRef = useRef<number | null>(null); // Время последней активности распознавания
   const fillerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fillerAudioRef = useRef<HTMLAudioElement | null>(null);
   const fillerIndexRef = useRef(0);
+  
+  const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
 
   const FILLER_PHRASE_COUNT = 5;
   const FILLER_DELAY_MS = 3500;
@@ -649,174 +654,227 @@ export function InterviewSessionView() {
     setIsProcessing(true);
     isUserTurnRef.current = false; // Пользователь отправил сообщение - останавливаем таймер
     stopTimer();
-    startFillerTimer();
+    // Filler audio disabled per user request
+    // startFillerTimer();
   };
 
   // Toggle listening (microphone) - using Web Speech API
   const toggleListening = () => {
     if (isMuted || timeExpired) return;
 
-    if (isListening) {
+    // Проверяем реальное состояние через ref, чтобы избежать проблем с асинхронностью setState
+    const recognition = (window as any).currentSpeechRecognition;
+    const isActuallyListening = recognition && isListening;
+
+    if (isActuallyListening) {
       // Stop recording: send accumulated text and stop recognition
-      const recognition = (window as any).currentSpeechRecognition;
-      if (recognition) {
-        if (speechPauseTimeoutRef.current) {
-          clearTimeout(speechPauseTimeoutRef.current);
-          speechPauseTimeoutRef.current = null;
-        }
-        const finalText = finalTranscriptRef.current.trim();
-        if (finalText) {
-          console.log('[Frontend] Sending accumulated text (user stopped):', finalText);
-          sendTextMessage(finalText);
-          finalTranscriptRef.current = '';
-          setInterimTranscript('');
-        }
-        recognition.stop();
+      console.log('[Frontend] User clicked to stop recording');
+      userRequestedStopRef.current = true;
+      
+      // Очищаем таймер молчания
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
       }
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+      
+      const finalText = finalTranscriptRef.current.trim();
+      if (finalText) {
+        console.log('[Frontend] Sending accumulated text (user stopped):', finalText);
+        sendTextMessage(finalText);
+        finalTranscriptRef.current = '';
+        setInterimTranscript('');
+      } else {
+        console.log('[Frontend] No text to send, stopping recognition');
+      }
+      
+      try {
+        recognition.stop();
+      } catch (e) {
+        console.log('[Frontend] Recognition already stopped:', e);
+      }
+      
       setIsListening(false);
+      lastSpeechActivityRef.current = null;
       return;
     }
 
-    // If we have pending text (recognition ended by itself earlier), send it on this click — never erase
+    // If we have pending text (recognition ended by itself earlier), send it on this click
     const pending = finalTranscriptRef.current.trim();
     if (pending) {
       console.log('[Frontend] Sending pending text from previous session:', pending);
       sendTextMessage(pending);
       finalTranscriptRef.current = '';
       setInterimTranscript('');
+      setIsListening(false);
       return;
     }
 
     // Not recording and no pending: block start when processing or not user's turn
-    if (isProcessing || (!isUserTurnRef.current && !timeExpired)) return;
-
-    // Check if Web Speech API is supported
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.error('[Frontend] Web Speech API not supported');
-      setError('Web Speech API не поддерживается в вашем браузере. Используйте Chrome или Edge.');
+    if (isProcessing || (!isUserTurnRef.current && !timeExpired)) {
+      console.log('[Frontend] Cannot start recording: isProcessing=', isProcessing, 'isUserTurn=', isUserTurnRef.current);
       return;
     }
 
-    // Create SpeechRecognition instance
+    console.log('[Frontend] Starting recording');
+    userRequestedStopRef.current = false;
+    lastSpeechActivityRef.current = Date.now();
+    startSpeechRecognition(true);
+  };
+
+  // Вынесено в отдельную функцию, чтобы перезапускать при onend (пауза 2–3 сек не означает конец речи)
+  function startSpeechRecognition(isInitialStart?: boolean) {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError('Web Speech API не поддерживается в вашем браузере. Используйте Chrome или Edge.');
+      return;
+    }
+    if (isInitialStart) {
+      finalTranscriptRef.current = '';
+    }
+
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'ru-RU'; // Russian language for interviews
+    recognition.lang = 'ru-RU';
 
-    console.log('[Frontend] SpeechRecognition created:', {
-      continuous: recognition.continuous,
-      interimResults: recognition.interimResults,
-      lang: recognition.lang
-    });
+    recognition.onstart = () => {
+      console.log('[Frontend] Speech recognition started');
+      setIsListening(true);
+      setInterimTranscript('');
+    };
 
-    // Reset final transcript for new session
-    finalTranscriptRef.current = '';
-
-      recognition.onstart = () => {
-        console.log('[Frontend] Speech recognition started');
-        setIsListening(true);
-        setInterimTranscript('');
-      };
-
-      recognition.onresult = (event) => {
-        let currentInterim = '';
-
-        // Reset pause timeout when we get new results (user is speaking)
-        if (speechPauseTimeoutRef.current) {
-          clearTimeout(speechPauseTimeoutRef.current);
-          speechPauseTimeoutRef.current = null;
-        }
-
-        // Handle Web Speech API results structure
-        for (let i = event.resultIndex || 0; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result && result.length > 0 && result[0]) {
-            const transcript = result[0].transcript;
-            if (result.isFinal) {
-              finalTranscriptRef.current += transcript + ' ';
-              console.log('[Frontend] Final result added:', transcript);
-              console.log('[Frontend] Final transcript so far:', finalTranscriptRef.current.trim());
-
-              // Don't send immediately - wait for pause or manual stop
-              // This allows user to continue speaking across pauses
-            } else {
-              currentInterim += transcript;
-              console.log('[Frontend] Interim result:', transcript);
-            }
+    recognition.onresult = (event: any) => {
+      let currentInterim = '';
+      
+      // Обновляем время последней активности
+      lastSpeechActivityRef.current = Date.now();
+      
+      // Очищаем таймер молчания при получении результатов
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+      
+      for (let i = event.resultIndex || 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result && result.length > 0 && result[0]) {
+          const transcript = result[0].transcript;
+          if (result.isFinal) {
+            finalTranscriptRef.current += transcript + ' ';
           } else {
-            console.log('[Frontend] Result structure unexpected:', result);
+            currentInterim += transcript;
           }
         }
-
-        // Update UI with interim text + accumulated final text
-        const accumulatedText = finalTranscriptRef.current.trim();
-        setInterimTranscript(accumulatedText ? `${accumulatedText} ${currentInterim}` : currentInterim);
-      };
-
-      recognition.onspeechend = () => {
-        console.log('[Frontend] Speech paused (not stopping recognition)');
-        // Manual-only: do not auto-send. Clear any lingering pause timeout.
-        if (speechPauseTimeoutRef.current) {
-          clearTimeout(speechPauseTimeoutRef.current);
-          speechPauseTimeoutRef.current = null;
-        }
-        // User must press the button to finish and send.
-      };
-
-      recognition.onend = () => {
-        console.log('[Frontend] Speech recognition ended');
-        if (speechPauseTimeoutRef.current) {
-          clearTimeout(speechPauseTimeoutRef.current);
-          speechPauseTimeoutRef.current = null;
-        }
-        setIsListening(false);
-        // Если есть накопленный текст — отправить, чтобы диалог продолжался без повторного нажатия
-        const text = finalTranscriptRef.current.trim();
-        if (text && wsRef.current?.readyState === WebSocket.OPEN) {
-          console.log('[Frontend] Auto-sending on recognition end:', text);
-          sendTextMessage(text);
-          finalTranscriptRef.current = '';
-          setInterimTranscript('');
-        }
-      };
-
-      recognition.onerror = (event) => {
-        console.error('[Frontend] Speech recognition error:', event.error);
-        
-        // Clear pause timeout
-        if (speechPauseTimeoutRef.current) {
-          clearTimeout(speechPauseTimeoutRef.current);
-          speechPauseTimeoutRef.current = null;
-        }
-
-        // Send any accumulated text before error
-        const finalText = finalTranscriptRef.current.trim();
-        if (finalText) {
-          console.log('[Frontend] Sending accumulated text on error:', finalText);
-          sendTextMessage(finalText);
-          finalTranscriptRef.current = '';
-          setInterimTranscript('');
-        }
-
-        setError(`Ошибка распознавания речи: ${event.error}`);
-        setIsListening(false);
-      };
-
-      // Start recognition
-      try {
-        recognition.start();
-        console.log('[Frontend] Starting speech recognition...');
-
-        // Store recognition reference for manual stop
-        (window as any).currentSpeechRecognition = recognition;
-
-      } catch (error) {
-        console.error('[Frontend] Error starting speech recognition:', error);
-        setError('Ошибка запуска распознавания речи');
       }
-  };
+      const accumulatedText = finalTranscriptRef.current.trim();
+      setInterimTranscript(accumulatedText ? `${accumulatedText} ${currentInterim}` : currentInterim);
+      
+      // Запускаем таймер молчания: если 6 секунд нет активности - автоматически остановить и отправить
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+      }
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (!userRequestedStopRef.current && isListening) {
+          const finalText = finalTranscriptRef.current.trim();
+          if (finalText) {
+            console.log('[Frontend] Silence timeout: auto-sending text after', SILENCE_TIMEOUT_MS, 'ms:', finalText);
+            userRequestedStopRef.current = true;
+            const currentRecognition = (window as any).currentSpeechRecognition;
+            if (currentRecognition) {
+              try {
+                currentRecognition.stop();
+              } catch (e) {
+                console.log('[Frontend] Error stopping recognition on silence timeout:', e);
+              }
+            }
+            sendTextMessage(finalText);
+            finalTranscriptRef.current = '';
+            setInterimTranscript('');
+            setIsListening(false);
+            lastSpeechActivityRef.current = null;
+          } else {
+            console.log('[Frontend] Silence timeout but no text to send');
+          }
+        }
+        silenceTimeoutRef.current = null;
+      }, SILENCE_TIMEOUT_MS);
+    };
+
+    recognition.onspeechend = () => {
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+    };
+
+    recognition.onend = () => {
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      if (userRequestedStopRef.current) {
+        setIsListening(false);
+        userRequestedStopRef.current = false;
+        lastSpeechActivityRef.current = null;
+        return;
+      }
+      // Пауза 2–3 сек: браузер завершил распознавание, но пользователь не нажимал «Стоп» — перезапускаем
+      console.log('[Frontend] Recognition ended (pause?), restarting in 300ms...');
+      (window as any).currentSpeechRecognition = null;
+      setTimeout(() => {
+        if (userRequestedStopRef.current) return;
+        lastSpeechActivityRef.current = Date.now();
+        startSpeechRecognition(false);
+      }, 300);
+    };
+
+    recognition.onerror = (event: any) => {
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      if (event.error === 'no-speech' && !userRequestedStopRef.current) {
+        // Часто при паузе браузер шлёт no-speech — не считаем ошибкой, перезапуск сделает onend
+        return;
+      }
+      const finalText = finalTranscriptRef.current.trim();
+      if (finalText && (event.error === 'aborted' || userRequestedStopRef.current)) {
+        sendTextMessage(finalText);
+        finalTranscriptRef.current = '';
+        setInterimTranscript('');
+      }
+      if (event.error !== 'no-speech') {
+        setError(`Ошибка распознавания речи: ${event.error}`);
+      }
+      setIsListening(false);
+      lastSpeechActivityRef.current = null;
+    };
+
+    try {
+      recognition.start();
+      (window as any).currentSpeechRecognition = recognition;
+    } catch (error) {
+      console.error('[Frontend] Error starting speech recognition:', error);
+      setError('Ошибка запуска распознавания речи');
+    }
+  }
 
   // End session
   const handleEndSession = () => {
@@ -837,6 +895,9 @@ export function InterviewSessionView() {
       }
       if (speechPauseTimeoutRef.current) {
         clearTimeout(speechPauseTimeoutRef.current);
+      }
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
       }
       if (typewriterIntervalRef.current) {
         clearInterval(typewriterIntervalRef.current);

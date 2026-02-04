@@ -24,6 +24,30 @@ def _fix_llm_json(text: str) -> str:
     return s
 
 
+def _extract_question_text_from_raw(response_text: str) -> Optional[str]:
+    """Извлекает текст вопроса из сырого ответа при ошибке парсинга JSON."""
+    if not response_text or not response_text.strip():
+        return None
+    idx = response_text.find('"question"')
+    if idx == -1:
+        idx = 0
+    rest = response_text[idx:]
+    # "text": "..." — либо до закрывающей ", либо до конца (обрезанный JSON)
+    m = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)"', rest)
+    if not m:
+        # обрезанный JSON без закрывающей кавычки: "text": "...
+        m2 = re.search(r'"text"\s*:\s*"((?:[^"\\]|\\.)*)', rest)
+        if m2:
+            s = m2.group(1).strip()
+            if 5 < len(s) <= 500:
+                return s.replace("\\n", "\n").replace('\\"', '"')
+        return None
+    s = m.group(1)
+    if s and 5 < len(s) < 500:
+        return s.replace("\\n", "\n").replace('\\"', '"')
+    return None
+
+
 class AIService:
     """Сервис для DeepSeek API (чат-модели). TTS не используется — только Google в core."""
 
@@ -252,29 +276,52 @@ Your role:
             for msg in transcript
         ])
         
+        criteria_list_str = ', '.join(evaluation_criteria)
+        position = session_params.get('position', 'N/A')
+        company = session_params.get('company', '')
+        goals = session_params.get('goals', [])
+        focus_areas = session_params.get('focus_areas', [])
+        expected_knowledge = session_params.get('expected_knowledge', [])
+        role_context = session_params.get('role_context', '')
+        
+        goals_str = '\n'.join([f"- {g}" for g in goals]) if goals else "Not specified"
+        focus_areas_str = ', '.join(focus_areas) if focus_areas else "Not specified"
+        expected_knowledge_str = '\n'.join([f"- {k}" for k in expected_knowledge]) if expected_knowledge else "Not specified"
+        
         system_prompt = f"""You are an expert HR analyst evaluating a job interview transcript.
 
-Position: {session_params.get('position', 'N/A')}
-Evaluation Criteria: {', '.join(evaluation_criteria)}
+Position: {position}
+Company: {company}
+Role Context: {role_context if role_context else "Not specified"}
+Goals: {goals_str}
+Focus Areas: {focus_areas_str}
+Expected Knowledge: {expected_knowledge_str}
+Evaluation Criteria: {criteria_list_str}
 
-Analyze the candidate's responses and provide a comprehensive evaluation."""
+Оцени кандидата по каждому критерию отдельно (0-100) и укажи обоснование для каждого."""
+        
+        criteria_json_example = ",\n        ".join([f'"{c}": {{"score": <0-100>, "justification": "<text>"}}' for c in evaluation_criteria])
         
         user_prompt = f"""Analyze this interview transcript and provide:
 
 1. Overall assessment score (0-100)
 2. Summary of the interview
-3. Observations by category (stressHandling, empathy, problemSolving, conflictResolution, communication)
-4. Strengths (at least 3)
-5. Areas for improvement (at least 2)
-6. Key effective phrases used by candidate
-7. Key phrases that could be improved
-8. Recommendation on readiness to work
+3. Score for each evaluation criterion (0-100) with justification
+4. Observations by category (stressHandling, empathy, problemSolving, conflictResolution, communication)
+5. Strengths (at least 3)
+6. Areas for improvement (at least 2)
+7. Key effective phrases used by candidate
+8. Key phrases that could be improved
+9. Recommendation on readiness to work
 
 Format your response as JSON with the following structure:
 {{
     "score": <number 0-100>,
     "summary": "<text>",
     "readiness": "<text>",
+    "criterionScores": {{
+        {criteria_json_example}
+    }},
     "observations": {{
         "stressHandling": "<observation>",
         "empathy": "<observation>",
@@ -322,10 +369,12 @@ Transcript:
                 pass
         
         # Fallback: return structured response
+        fallback_criterion_scores = {c: {"score": 50, "justification": "Evaluation incomplete"} for c in evaluation_criteria}
         return {
             "score": 75,
             "summary": response[:500] if response else "Analysis completed",
             "readiness": "Further evaluation needed",
+            "criterionScores": fallback_criterion_scores,
             "observations": {},
             "strengths": [],
             "improvements": [],
@@ -360,18 +409,15 @@ Transcript:
             GPTResponse со структурированным ответом от DeepSeek
         """
         try:
-            # Формируем системный промпт
+            # API без состояния: каждый запрос независим, модель не «помнит» прошлые вызовы.
+            # Поэтому каждый раз отправляем полный контекст: системные правила + текущее состояние
+            # (история, прогресс, последний ответ) — иначе у модели нет информации для следующего вопроса.
             system_prompt = self._build_session_system_prompt(context)
-            
-            # Определяем, является ли это восстановлением сессии (если есть история больше чем приветствие)
             is_resume = len(context.conversation_history) > 1
-            
-            # Формируем промпт для DeepSeek с инструкциями
             user_prompt = self._build_session_user_prompt(context, is_resume=is_resume)
 
-            # For DeepSeek, add explicit JSON formatting instructions since response_format might not work
             if self.provider == "deepseek":
-                user_prompt += "\n\nIMPORTANT: Respond ONLY with valid JSON. Do not include any text before or after the JSON. The response must be parseable JSON."
+                user_prompt += " Only valid JSON, no text before/after."
 
             # Подготовка сообщений
             messages = [
@@ -379,10 +425,15 @@ Transcript:
                 {"role": "user", "content": user_prompt}
             ]
             
-            # Вызов DeepSeek API с JSON mode
-            print(f"[AI] Calling DeepSeek API with model {self.model_gpt}")
-            print(f"[AI] System prompt length: {len(system_prompt)}")
-            print(f"[AI] User prompt length: {len(user_prompt)}")
+            # Логирование промптов для проверки (что уходит в DeepSeek)
+            print("\n" + "=" * 60 + "\n[AI] DEEPSEEK REQUEST PROMPTS\n" + "=" * 60)
+            print(f"[AI] Model: {self.model_gpt}")
+            print(f"[AI] System prompt length: {len(system_prompt)}, user prompt length: {len(user_prompt)}")
+            print("\n--- SYSTEM PROMPT ---\n")
+            print(system_prompt)
+            print("\n--- USER PROMPT ---\n")
+            print(user_prompt)
+            print("\n" + "=" * 60 + "\n")
             
             # Prepare API call parameters
             # Optimized for faster responses:
@@ -434,10 +485,10 @@ Transcript:
             # Handle empty response
             if not response_text or response_text.strip() == "":
                 print(f"[{self.provider.upper()}] Empty response received, using fallback")
-                # Create a fallback response
+                fallback_text = "Что бы вы хотели уточнить или добавить?"
                 fallback_response = {
                     "question": {
-                        "text": "Расскажите о вашем опыте работы по данной специальности.",
+                        "text": fallback_text,
                         "type": "main",
                         "isClarifying": False,
                         "isDynamic": False,
@@ -447,7 +498,8 @@ Transcript:
                         "needsClarification": False,
                         "answerQuality": "complete",
                         "shouldMoveNext": True,
-                        "estimatedTimeRemaining": 25
+                        "estimatedTimeRemaining": 25,
+                        "interviewComplete": False,
                     }
                 }
                 return GPTResponse(**fallback_response)
@@ -496,7 +548,7 @@ Transcript:
             except json.JSONDecodeError as e:
                 print(f"[AI] JSON decode error: {e}")
                 print(f"[AI] Response text (first 500 chars): {response_text[:500]}")
-                # Extract JSON block and retry with fixes
+                # Сначала пробуем вытащить JSON-блок и починить
                 json_match = re.search(r'\{[\s\S]*\}', response_text)
                 if json_match:
                     extracted = _fix_llm_json(json_match.group())
@@ -507,11 +559,44 @@ Transcript:
                         return result
                     except json.JSONDecodeError:
                         pass
-                # Fallback: return a safe default so the interview can continue
-                print(f"[AI] Using fallback response due to JSON parse failure")
+                # Повторный запрос: просим ответить ещё раз только валидным JSON
+                print(f"[AI] Requesting DeepSeek to respond again with valid JSON only")
+                retry_user = user_prompt + "\n\n[Твой предыдущий ответ содержал невалидный JSON. Ответь ещё раз только валидным JSON по структуре из системного промпта, без лишнего текста.]"
+                api_params_retry = {**api_params, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": retry_user}]}
+                try:
+                    if api_params_retry.get("stream"):
+                        response_text = await self._handle_streaming_response(api_params_retry)
+                    else:
+                        response = await self.client.chat.completions.create(**api_params_retry)
+                        response_text = response.choices[0].message.content
+                except Exception as retry_err:
+                    print(f"[AI] Retry request failed: {retry_err}")
+                    response_text = None
+                if response_text and response_text.strip():
+                    fixed_retry = _fix_llm_json(response_text)
+                    try:
+                        response_data = json.loads(fixed_retry)
+                        result = GPTResponse(**response_data)
+                        print(f"[AI] JSON parsed successfully after retry")
+                        return result
+                    except json.JSONDecodeError:
+                        json_match_retry = re.search(r'\{[\s\S]*\}', response_text)
+                        if json_match_retry:
+                            try:
+                                response_data = json.loads(_fix_llm_json(json_match_retry.group()))
+                                result = GPTResponse(**response_data)
+                                print(f"[AI] JSON parsed from extracted block after retry")
+                                return result
+                            except json.JSONDecodeError:
+                                pass
+                # Fallback: извлекаем текст из ответа (первого или повторного) или нейтральная реплика
+                extracted = _extract_question_text_from_raw(response_text) if response_text else None
+                fallback_text = extracted if extracted else "Что бы вы хотели уточнить или добавить?"
+                preview = fallback_text[:80] + "..." if len(fallback_text) > 80 else fallback_text
+                print(f"[AI] Using fallback response after retry/parse failure, question: {preview}")
                 fallback = {
                     "question": {
-                        "text": "Расскажите о вашем опыте работы по данной специальности.",
+                        "text": fallback_text,
                         "type": "main",
                         "isClarifying": False,
                         "isDynamic": False,
@@ -522,6 +607,7 @@ Transcript:
                         "answerQuality": "complete",
                         "shouldMoveNext": True,
                         "estimatedTimeRemaining": 25,
+                        "interviewComplete": False,
                     },
                 }
                 return GPTResponse(**fallback)
@@ -560,12 +646,7 @@ Transcript:
                         content = delta.content
                         accumulated_text += content
                         chunk_count += 1
-                        
-                        # Log progress every 10 chunks
-                        if chunk_count % 10 == 0:
-                            print(f"[{self.provider.upper()}] Received {chunk_count} chunks, {len(accumulated_text)} chars so far...")
             
-            print(f"[{self.provider.upper()}] Streaming complete: {chunk_count} chunks, {len(accumulated_text)} total chars")
             return accumulated_text.strip()
             
         except Exception as e:
@@ -637,8 +718,16 @@ Transcript:
 6. НЕ ПОВТОРЯЙ ВОПРОСЫ - СТРОГО ЗАПРЕЩЕНО:
    - НИКОГДА не задавай вопрос, который уже был задан в этом интервью
    - Все заданные вопросы перечислены в разделе "УЖЕ ЗАДАННЫЕ ВОПРОСЫ"
+   - ВАЖНО: Если ты видишь вопрос в списке "УЖЕ ЗАДАННЫЕ ВОПРОСЫ", это означает, что он УЖЕ БЫЛ ЗАДАН
+   - НЕ задавай похожий вопрос с той же темой - если уже спрашивал про опыт работы, НЕ спрашивай про опыт работы снова
    - Если вопрос был задан - переходи к следующему вопросу из шаблона
-   - Если все вопросы из шаблона заданы - переходи к симуляции или заверши интервью"""
+   - ЗАВЕРШЕНИЕ ИНТЕРВЬЮ (КРИТИЧЕСКИ ВАЖНО):
+     * Если все вопросы из шаблона заданы (current_question_index >= total_questions) - ОБЯЗАТЕЛЬНО заверши интервью
+     * НЕ задавай вопросы повторно, НЕ придумывай новые вопросы
+     * Заверши интервью фразой типа: "Спасибо за ваши ответы. На этом скрининг-собеседование завершено. Мы свяжемся с вами в ближайшее время."
+     * Установи interviewComplete = true в metadata
+     * Если есть симуляция и она еще не проведена - можно провести симуляцию перед завершением
+   - Если кандидат уже ответил на вопрос, но ответ был кратким - можешь задать УТОЧНЯЮЩИЙ подвопрос из шаблона, но НЕ повторяй основной вопрос"""
         
         # Добавляем информацию о customer_simulation, если оно есть
         if interview.customer_simulation and interview.customer_simulation.enabled:
@@ -672,7 +761,36 @@ Transcript:
 - Задавай релевантные вопросы на основе требований к позиции
 - Слушай активно и задавай уточняющие вопросы при необходимости
 - Держи ответы краткими и профессиональными
-- Веди беседу естественно"""
+- Веди беседу естественно
+
+7. КОММЕНТАРИИ К ОТВЕТАМ КАНДИДАТА (ОБЯЗАТЕЛЬНО):
+   - ПЕРЕД каждым новым вопросом ОБЯЗАТЕЛЬНО прокомментируй предыдущий ответ кандидата
+   - Комментарий должен быть кратким (1-2 предложения), естественным и уместным
+   - Примеры хороших комментариев:
+     * "Спасибо за подробный ответ. Это интересный опыт."
+     * "Понятно, благодарю за уточнение."
+     * "Хорошо, это важный момент."
+   - Комментарий должен быть частью текста вопроса, а не отдельным предложением
+   - НЕ комментируй приветствие и проверку готовности
+   - Комментарий делает общение более живым и естественным
+
+8. АНАЛИЗ ОТВЕТОВ И ПРИНЯТИЕ РЕШЕНИЙ (думай как рекрутер):
+   - Анализируй каждый ответ кандидата как опытный рекрутер
+   - Обращай внимание на подозрительные моменты:
+     * Упоминание проблем на предыдущей работе без объяснения
+     * Уклончивые или неполные ответы
+     * Противоречия в ответах
+     * Негативные комментарии о коллегах/компаниях
+     * Слишком общие ответы без конкретики
+   - РЕШАЙ САМ, стоит ли углубиться в подозрительный момент:
+     * Если момент критичен для оценки - задай уточняющий вопрос (но не дави)
+     * Если момент не критичен или кандидат явно не хочет отвечать - переходи к следующему вопросу
+     * Если времени мало (< 5 минут) - не углубляйся, переходи к следующему вопросу
+   - НЕ дави на кандидата - если он не хочет отвечать прямо, уважай это и переходи дальше
+   - Уточняющие вопросы должны быть тактичными и профессиональными
+   - Пример: если кандидат вскользь упомянул, что ему не нравилась работа:
+     * Можно спросить: "Можете уточнить, что именно вас не устраивало?"
+     * Если ответ уклончивый - не настаивай, переходи к следующему вопросу"""
         
         if context.interview.instructions:
             prompt += f"\n\nДополнительные инструкции: {context.interview.instructions}\n"
@@ -705,146 +823,150 @@ Transcript:
         return prompt
     
     def _build_session_user_prompt(self, context: GPTContextRequest, is_resume: bool = False) -> str:
-        """Формирует пользовательский промпт с контекстом"""
+        """Формирует пользовательский промпт: только переменные данные (правила уже в system)."""
         interview = context.interview
         remaining_minutes = context.remaining_time.minutes
         remaining_seconds = context.remaining_time.seconds
         
-        prompt = f"""КОНТЕКСТ СКРИНИНГ-СОБЕСЕДОВАНИЯ:"""
-        
-        # Добавляем информацию о восстановлении сессии
+        # Краткий контекст без дублирования правил из system
+        prompt = f"Позиция: {interview.position}. Компания: {interview.company or 'Не указана'}. Время: {remaining_minutes} мин {remaining_seconds} сек."
         if is_resume:
-            prompt += f"""
-
-⚠️ ВАЖНО: Сессия была прервана и восстановлена. Ниже полная история диалога."""
-        
-        prompt += f"""
-
-Позиция: {interview.position}
-Компания: {interview.company or "Не указана"}
-Оставшееся время: {remaining_minutes} минут {remaining_seconds} секунд"""
-        
-        # Влияние времени на поведение
+            prompt += " [Сессия восстановлена.]"
         if remaining_minutes < 5:
-            prompt += "\n⚠️ ВНИМАНИЕ: Времени осталось мало! НЕ задавай дополнительные вопросы, даже если они разрешены."
+            prompt += " Мало времени."
         elif remaining_minutes < 10:
-            prompt += "\n⚠️ Времени осталось немного. Сфокусируйся на основных вопросах."
-        else:
-            prompt += "\n✅ Времени достаточно. Можешь задавать уточняющие вопросы для лучшего понимания."
+            prompt += " Мало времени, фокус на главном."
         
-        # Проверяем, является ли это первым сообщением (приветствием)
-        is_first_message = len(context.conversation_history) == 0
-        
-        if is_first_message:
-            # Первое сообщение - приветствие
-            prompt += f"""
-
-🎯 ИНСТРУКЦИЯ ДЛЯ ПЕРВОГО СООБЩЕНИЯ (ПРИВЕТСТВИЕ):
-Ты должен поздороваться и спросить о готовности начать интервью.
-Формат: "Здравствуйте! Я провожу скрининг-собеседование в компанию {interview.company or "компанию"} на позицию {interview.position}. Готовы ли вы начать?"
-
-ВАЖНО: Это приветствие, НЕ задавай первый вопрос из шаблона сейчас. Сначала дождись подтверждения готовности от кандидата."""
-        else:
-            # Следующий вопрос из шаблона (ВСЕГДА указывать для последующих сообщений)
-            if context.current_interview_question:
-                current_q = context.current_interview_question
-                prompt += f"""
-
-СЛЕДУЮЩИЙ ВОПРОС ИЗ ШАБЛОНА:
-- Текст: {current_q.text}
-- Порядковый номер: {current_q.order_index + 1}"""
-                
-                if current_q.clarifying_questions:
-                    prompt += f"\n- Уточняющие подвопросы для этого вопроса:\n"
-                    for i, clar_q in enumerate(current_q.clarifying_questions, 1):
-                        prompt += f"  {i}. {clar_q}\n"
-                
-                # Инструкции о возможности задать динамический вопрос
-                if context.allow_dynamic_questions:
-                    prompt += f"""
-\nИНСТРУКЦИЯ: Следующий вопрос из шаблона: "{current_q.text}"
-Ты можешь:
-1. Задать этот вопрос из шаблона (isDynamic = false)
-2. ИЛИ если считаешь это действительно важным для оценки кандидата, сначала задать свой дополнительный вопрос (isDynamic = true), а затем задать вопрос из шаблона
-НО: вопросы из шаблона всегда в приоритете!"""
-                else:
-                    prompt += f"""
-\nИНСТРУКЦИЯ: Задай следующий вопрос из шаблона: "{current_q.text}"
-Ты можешь использовать уточняющие подвопросы, если ответ кандидата недостаточно точен.
-НЕ придумывай свои вопросы (isDynamic должен быть false)."""
-            else:
-                # Если вопросов из шаблона больше нет
-                prompt += "\n\n⚠️ Все основные вопросы из шаблона заданы."
-                if context.allow_dynamic_questions:
-                    prompt += " Ты можешь задать дополнительные вопросы, если это важно для оценки."
-        
-        # История диалога
-        if context.conversation_history:
-            prompt += "\n\nИСТОРИЯ ДИАЛОГА:"
-            # Показываем только последние 4–6 сообщений для контекста, чтобы не раздувать промпт
-            recent_history = context.conversation_history[-6:] if len(context.conversation_history) > 6 else context.conversation_history
-            for msg in recent_history:
-                role_label = "AI" if msg.role == "ai" else "Кандидат"
-                prompt += f"\n{role_label}: {msg.message}"
-        
-        # История вопросов и ответов
+        # Сначала собираем список всех уже заданных вопросов для проверки дубликатов
+        all_asked_questions = []
         if context.session_history:
-            prompt += "\n\nИСТОРИЯ ВОПРОСОВ И ОТВЕТОВ:"
-            # Показываем последние 3–4 Q&A для контекста
-            recent_qas = context.session_history[-4:] if len(context.session_history) > 4 else context.session_history
-            for i, qa in enumerate(recent_qas, 1):
-                prompt += f"\n{i}. [{qa.question_type.upper()}] {qa.question_text}"
-                prompt += f"\n   Ответ кандидата: {qa.answer_text}"
-
-            # Список всех уже заданных вопросов для предотвращения повторений
-            # Чтобы не передавать в промпт всю историю, ограничиваемся последними 10 вопросами
             recent_for_dedup = context.session_history[-10:] if len(context.session_history) > 10 else context.session_history
             all_asked_questions = [qa.question_text for qa in recent_for_dedup]
+            
+            # Также извлекаем вопросы из conversation_history (включая только что заданные, еще без ответа)
+            ai_messages_from_history = [
+                msg.message for msg in context.conversation_history 
+                if msg.role == "ai" and msg.message.strip()
+            ]
+            for ai_msg in ai_messages_from_history:
+                msg_lower = ai_msg.lower()
+                is_greeting = (
+                    "готовы ли вы начать" in msg_lower or 
+                    "здравствуйте" in msg_lower or
+                    (len(ai_msg) < 30 and "?" not in ai_msg)
+                )
+                is_question = (
+                    len(ai_msg) > 20 and 
+                    not is_greeting and
+                    ("?" in ai_msg or ai_msg.strip().startswith(("Расскажите", "Какие", "Как", "Что", "Где", "Когда", "Почему", "Опишите", "Объясните")))
+                )
+                if is_question:
+                    question_normalized = ai_msg.strip()
+                    msg_words = set(msg_lower.split())
+                    is_duplicate = False
+                    for q in all_asked_questions:
+                        q_lower = q.lower()
+                        if q.strip().lower() == question_normalized.lower():
+                            is_duplicate = True
+                            break
+                        if len(q) > 30 and len(question_normalized) > 30:
+                            if question_normalized[:50].lower() == q[:50].lower():
+                                is_duplicate = True
+                                break
+                        q_words = set(q_lower.split())
+                        common_keywords = msg_words & q_words
+                        if len(common_keywords) >= 3 and len(msg_words) >= 5 and len(q_words) >= 5:
+                            key_phrases = [
+                                ("опыт работы", "опыт", "работал"),
+                                ("ключевые задачи", "задачи", "решали"),
+                                ("инструменты", "использовали", "используете"),
+                                ("специальность", "профессия", "должность"),
+                            ]
+                            for phrase_group in key_phrases:
+                                if any(p in msg_lower for p in phrase_group) and any(p in q_lower for p in phrase_group):
+                                    is_duplicate = True
+                                    break
+                            if is_duplicate:
+                                break
+                    if not is_duplicate:
+                        all_asked_questions.append(question_normalized)
+        
+        is_first_message = len(context.conversation_history) == 0
+        if is_first_message:
+            prompt += "\n\nПервое сообщение: задай приветствие и спроси о готовности (не задавай вопрос из шаблона)."
+        else:
+            if context.current_interview_question:
+                current_q = context.current_interview_question
+                prompt += f"\n\nСлед. вопрос шаблона ({current_q.order_index + 1}): {current_q.text}"
+                if current_q.clarifying_questions:
+                    for i, cq in enumerate(current_q.clarifying_questions[:3], 1):
+                        prompt += f"\n  Подвопрос {i}: {cq}"
+                # Проверяем, не задавали ли уже похожий вопрос
+                template_q_lower = current_q.text.lower()
+                already_asked_similar = False
+                if all_asked_questions:
+                    for asked_q in all_asked_questions:
+                        asked_q_lower = asked_q.lower()
+                        template_words = set(template_q_lower.split())
+                        asked_words = set(asked_q_lower.split())
+                        if len(template_words & asked_words) >= 3:
+                            key_phrases = [
+                                ("опыт работы", "опыт", "работал", "работали"),
+                                ("специальность", "сфере", "профессии", "должности"),
+                                ("метрики", "показатели", "kpi"),
+                                ("a/b", "тестирование", "эксперименты"),
+                            ]
+                            for phrase_group in key_phrases:
+                                if any(p in template_q_lower for p in phrase_group) and any(p in asked_q_lower for p in phrase_group):
+                                    already_asked_similar = True
+                                    break
+                            if already_asked_similar:
+                                break
+                if already_asked_similar:
+                    prompt += "\n(Похожий вопрос уже задан — переходи к следующему или заверши.)"
+                elif not context.allow_dynamic_questions:
+                    prompt += "\n(Только из шаблона или уточняющие.)"
+            else:
+                prompt += "\n\nВСЕ ВОПРОСЫ ШАБЛОНА ЗАДАНЫ - ОБЯЗАТЕЛЬНО ЗАВЕРШИ ИНТЕРВЬЮ:"
+                prompt += "\n- НЕ задавай вопросы повторно"
+                prompt += "\n- НЕ придумывай новые вопросы"
+                if interview.customer_simulation and interview.customer_simulation.enabled and not getattr(context, "simulation_done", False):
+                    prompt += "\n- Можно провести симуляцию (если еще не проведена), затем заверши"
+                else:
+                    prompt += "\n- Заверши интервью с благодарностью (например: 'Спасибо за ваши ответы. На этом скрининг-собеседование завершено.')"
+                prompt += "\n- Установи interviewComplete = true в metadata"
+        
+        # История: последние сообщения и Q&A (коротко)
+        if context.conversation_history:
+            recent = context.conversation_history[-4:] if len(context.conversation_history) > 4 else context.conversation_history
+            prompt += "\n\nДиалог:"
+            for msg in recent:
+                r = "AI" if msg.role == "ai" else "Кандидат"
+                prompt += f"\n{r}: {msg.message[:200]}{'...' if len(msg.message) > 200 else ''}"
+        if context.session_history:
+            recent_qas = context.session_history[-3:] if len(context.session_history) > 3 else context.session_history
+            prompt += "\n\nQ&A:"
+            for qa in recent_qas:
+                prompt += f"\n- [{qa.question_type}] {qa.question_text[:100]}{'...' if len(qa.question_text) > 100 else ''}"
+                prompt += f"\n  Ответ: {qa.answer_text[:150]}{'...' if len(qa.answer_text) > 150 else ''}"
             if all_asked_questions:
-                prompt += f"\n\nУЖЕ ЗАДАННЫЕ ВОПРОСЫ (НЕЛЬЗЯ ПОВТОРЯТЬ):"
-                for i, question in enumerate(all_asked_questions, 1):
-                    prompt += f"\n{i}. {question}"
-        
-        # Последний ответ пользователя
+                prompt += "\n\nУже заданы (не повторять):"
+                for q in (all_asked_questions[-7:] if len(all_asked_questions) > 7 else all_asked_questions):
+                    prompt += f"\n- {q[:120]}{'...' if len(q) > 120 else ''}"
         if context.user_response:
-            prompt += f"\n\nПОСЛЕДНИЙ ОТВЕТ КАНДИДАТА:\n{context.user_response.text}"
-        
-        # Прогресс
+            prompt += f"\n\nПОСЛЕДНИЙ ОТВЕТ КАНДИДАТА (ОБЯЗАТЕЛЬНО ПРОКОММЕНТИРУЙ ПЕРЕД НОВЫМ ВОПРОСОМ):"
+            prompt += f"\n{context.user_response.text[:400]}{'...' if len(context.user_response.text) > 400 else ''}"
+            prompt += "\n\nПроанализируй этот ответ как рекрутер: есть ли подозрительные моменты? Стоит ли углубиться? Если да - задай тактичный уточняющий вопрос. Если нет - прокомментируй и переходи к следующему вопросу."
         progress = context.question_progress
-        prompt += f"""
-
-ПРОГРЕСС:
-- Текущий вопрос: {progress.current_question_index + 1} из {progress.total_questions}
-- Отвечено основных вопросов: {progress.answered_questions}"""
+        prompt += f"\n\nПрогресс: вопрос {progress.current_question_index + 1}/{progress.total_questions}, отвечено {progress.answered_questions}."
         
-        # Информация о customer_simulation
         if interview.customer_simulation and interview.customer_simulation.enabled:
             simulation_done = getattr(context, "simulation_done", False)
             if simulation_done:
-                prompt += """
-
-🎭 СИМУЛЯЦИЯ УЖЕ ПРОВЕДЕНА:
-Кандидат уже ответил на вопрос по ситуации. НЕ задавай новых вопросов по сценарию. НЕ повторяй вопрос по ситуации.
-ИНСТРУКЦИЯ: Заверши интервью — поблагодари кандидата и кратко подведи итог (например: «Спасибо за ответы. На этом интервью завершено.»)."""
+                prompt += "\n\nСимуляция проведена — заверши интервью (поблагодари, итог)."
             else:
-                # Проверяем, подходит ли интервью к концу
-                all_questions_asked = progress.current_question_index >= progress.total_questions
-                time_low = remaining_minutes < 5
-                
-                if all_questions_asked or time_low:
-                    prompt += f"""
-
-🎭 МОДЕЛИРОВАНИЕ РЕАЛЬНОЙ РАБОЧЕЙ СИТУАЦИИ:
-Интервью подходит к концу. Ты можешь провести симуляцию реальной рабочей ситуации.
-- Роль клиента: {interview.customer_simulation.role or "не указана"}
-- Описание сценария: {interview.customer_simulation.scenario or "не указан"}
-
-ИНСТРУКЦИЯ: Сыграй роль этого клиента и проведи симуляцию. Веди себя соответственно сценарию.
-Задай в этой симуляции не более 1–2 вопросов. После ответа кандидата заверши симуляцию, не продолжай разыгрывать сценарий.
-Начни с вводной фразы, например: «Давайте представим ситуацию» или «Представьте, что…».
-Оценивай реакцию кандидата на стрессовую ситуацию. После симуляции можно завершить интервью."""
-        
-        prompt += "\n\nЗадай следующий вопрос на основе этого контекста. Верни ответ ТОЛЬКО в JSON формате согласно структуре из системного промпта."
-        
+                if progress.current_question_index >= progress.total_questions or remaining_minutes < 5:
+                    prompt += f"\n\nМожно симуляция: роль {interview.customer_simulation.role or 'клиент'}, сценарий: {(interview.customer_simulation.scenario or '')[:80]}..."
+        prompt += "\n\nОтветь только валидным JSON по структуре из системного промпта."
         return prompt
 
