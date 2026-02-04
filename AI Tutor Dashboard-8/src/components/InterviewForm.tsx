@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { 
-  Plus, X, MessageSquare, Users as UsersIcon, Briefcase, HelpCircle, ChevronDown, ChevronUp, AlertCircle
+  Plus, X, MessageSquare, Briefcase, HelpCircle, ChevronDown, ChevronUp, AlertCircle, Sparkles, Loader2
 } from 'lucide-react';
+import { useAtom } from 'jotai';
+import { languageAtom, useTranslation } from '@/lib/i18n';
 import { SessionParams, Question } from '@/types';
 
 interface QuestionWithClarifications {
@@ -15,7 +17,9 @@ interface Props {
 }
 
 export function InterviewForm({ onClose, onCreate }: Props) {
-  // Внутреннее состояние формы: вопросы хранятся как string[] для удобства редактирования
+  const [language] = useAtom(languageAtom);
+  const t = useTranslation(language);
+
   const [position, setPosition] = useState<string>('');
   const [company, setCompany] = useState<string>('');
   const [questions, setQuestions] = useState<string[]>([
@@ -32,6 +36,8 @@ export function InterviewForm({ onClose, onCreate }: Props) {
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
   const [clarifyingInputs, setClarifyingInputs] = useState<Record<number, string>>({});
   const [questionClarifications, setQuestionClarifications] = useState<Record<number, string[]>>({});
+  const [jobDescription, setJobDescription] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const addQuestion = () => {
     if (questionInput.trim()) {
@@ -87,11 +93,11 @@ export function InterviewForm({ onClose, onCreate }: Props) {
 
   const handleSubmit = () => {
     if (!position.trim()) {
-      alert('Пожалуйста, укажите название вакансии');
+      alert(t.interviewForm.alertJobTitle);
       return;
     }
     if (!questions || questions.length === 0) {
-      alert('Пожалуйста, добавьте хотя бы один вопрос');
+      alert(t.interviewForm.alertQuestions);
       return;
     }
     
@@ -127,25 +133,112 @@ export function InterviewForm({ onClose, onCreate }: Props) {
     onCreate(sessionParams);
   };
 
+  const generateQuestions = async () => {
+    if (!jobDescription.trim()) {
+      alert(t.interviewForm.alertJobDescription);
+      return;
+    }
+    setIsGenerating(true);
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const desc = jobDescription.toLowerCase();
+      let newQuestions: string[] = [];
+      let scenario = '';
+      let role = '';
+      let newClarifications: Record<number, string[]> = {};
+      if (desc.includes('официант') || desc.includes('бармен') || desc.includes('ресторан')) {
+        newQuestions = [
+          'Расскажите о вашем опыте работы в сфере общественного питания',
+          'Как вы относитесь к работе в вечерние и выходные дни?',
+          'Опишите ситуацию, когда вам приходилось обслуживать большое количество гостей одновременно',
+          'Что бы вы сделали, если гость недоволен блюдом?'
+        ];
+        scenario = 'Гость заказал стейк medium rare, но получил well done. Он очень недоволен и требует вызвать менеджера.';
+        role = 'Недовольный гость ресторана';
+        newClarifications = { 0: ['Сколько лет вы работали в этой сфере?', 'В каком формате заведения вы работали?'], 2: ['Как вы распределяли приоритеты между столиками?'], 3: ['Вы когда-нибудь делали комплимент от заведения?'] };
+      } else if (desc.includes('колл-центр') || desc.includes('оператор') || desc.includes('поддержка')) {
+        newQuestions = [
+          'Расскажите о вашем опыте работы с клиентами по телефону',
+          'Как вы справляетесь с агрессивными или недовольными клиентами?',
+          'Опишите вашу скорость печати и навыки работы с компьютером',
+          'Готовы ли вы к работе по сменному графику?'
+        ];
+        scenario = 'Клиент звонит третий раз по одной проблеме. Предыдущие операторы не помогли. Он очень раздражен и кричит.';
+        role = 'Раздраженный клиент с нерешенной проблемой';
+        newClarifications = { 0: ['Сколько звонков в день вы обрабатывали?', 'С каким CRM-системами вы работали?'], 1: ['Расскажите конкретный пример из практики'], 2: ['Какие программы вы используете в работе?'] };
+      } else if (desc.includes('администратор') || desc.includes('ресепшн') || desc.includes('отель')) {
+        newQuestions = [
+          'Расскажите о вашем опыте работы на ресепшн или администратором',
+          'Как вы организуете свою работу при большом потоке гостей?',
+          'Опишите ситуацию, когда нужно было решить конфликт между гостями',
+          'Какими языками вы владеете и на каком уровне?'
+        ];
+        scenario = 'Гость приехал на заселение, но его бронь не найдена в системе. Отель полностью забронирован. Гость устал после долгой дороги и очень расстроен.';
+        role = 'Уставший гость без подтвержденной брони';
+        newClarifications = { 0: ['В каких системах бронирования вы работали?'], 1: ['Какие инструменты вы используете для организации работы?'], 3: ['Проходили ли вы языковые курсы?'] };
+      } else if (desc.includes('продав') || desc.includes('консультант') || desc.includes('менеджер по продажам')) {
+        newQuestions = [
+          'Расскажите о вашем опыте в продажах',
+          'Как вы работаете с возражениями клиентов?',
+          'Какие техники продаж вы используете?',
+          'Опишите вашу самую успешную сделку'
+        ];
+        scenario = 'Клиент интересуется продуктом, но сомневается из-за цены. Он сравнивает с конкурентами и говорит, что у них дешевле.';
+        role = 'Клиент, сравнивающий цены с конкурентами';
+        newClarifications = { 0: ['Какой был ваш средний чек?', 'Сколько сделок закрывали в месяц?'], 1: ['Приведите пример работы с конкретным возражением'], 3: ['Какая была сумма сделки?'] };
+      } else {
+        newQuestions = [
+          'Расскажите о вашем опыте работы в этой сфере',
+          'Почему вы хотите работать именно на этой позиции?',
+          'Как вы справляетесь со стрессовыми ситуациями?',
+          'Опишите ваши сильные стороны для этой работы'
+        ];
+        scenario = 'Сложная рабочая ситуация требует быстрого принятия решения. Клиент недоволен и требует немедленного решения проблемы.';
+        role = 'Требовательный клиент';
+        newClarifications = { 0: ['Сколько лет опыта у вас в этой области?'], 2: ['Приведите конкретный пример из практики'] };
+      }
+      const firstLine = jobDescription.trim().split(/\n/)[0]?.slice(0, 80) || '';
+      if (firstLine) setPosition(p => p || firstLine);
+      setQuestions(newQuestions);
+      setCustomerSimulationRole(role);
+      setCustomerSimulationScenario(scenario);
+      setCustomerSimulationEnabled(true);
+      setQuestionClarifications(newClarifications);
+      alert(t.interviewForm.successMessage);
+    } catch (e) {
+      console.error(e);
+      alert(t.interviewForm.errorGenerate);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-5xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl max-w-5xl w-full my-auto flex flex-col shadow-2xl overflow-hidden shrink-0"
+        style={{ height: 'calc(100vh - 1.5rem)', maxHeight: 'calc(100vh - 1.5rem)' }}
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header - Fixed */}
-        <div className="border-b border-gray-200 px-6 py-5 flex-shrink-0 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="border-b border-gray-200 px-4 sm:px-6 py-4 sm:py-5 flex-shrink-0 bg-gradient-to-r from-blue-50 to-purple-50">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-                <Briefcase className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold text-gray-900">Создать AI-интервью</h3>
-                <p className="text-sm text-gray-600">Настройте интервью за 2 минуты</p>
+                <h3 className="text-lg sm:text-xl font-semibold text-gray-900">{t.interviewForm.title}</h3>
+                <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{t.interviewForm.subtitle}</p>
               </div>
             </div>
             <button
               onClick={onClose}
               className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/60 text-gray-500 hover:text-gray-700 transition-all"
-              aria-label="Закрыть"
+              aria-label={t.interviewForm.close}
             >
               <X className="w-5 h-5" />
             </button>
@@ -153,60 +246,96 @@ export function InterviewForm({ onClose, onCreate }: Props) {
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-6"
+        >
           <div className="space-y-8">
-            {/* Основная информация */}
             <section>
               <div className="mb-4">
-                <h4 className="text-base font-semibold text-gray-900 mb-1">
-                  Информация о вакансии
-                </h4>
-                <p className="text-sm text-gray-500">
-                  Используется для корректной формулировки вопросов и сценариев интервью
-                </p>
+                <h4 className="text-base font-semibold text-gray-900 mb-1">{t.interviewForm.jobInfoTitle}</h4>
+                <p className="text-sm text-gray-500">{t.interviewForm.jobInfoDesc}</p>
               </div>
-              
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Название вакансии <span className="text-red-500">*</span>
+                    {t.interviewForm.jobTitle} <span className="text-red-500">{t.interviewForm.jobTitleRequired}</span>
                   </label>
                   <input
                     type="text"
                     value={position}
                     onChange={(e) => setPosition(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all shadow-sm hover:border-gray-400"
-                    placeholder="Например: Администратор / Официант / Оператор колл-центра"
+                    placeholder={t.interviewForm.jobTitlePlaceholder}
                   />
                 </div>
-                
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Название компании
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.interviewForm.companyName}</label>
                   <input
                     type="text"
                     value={company}
                     onChange={(e) => setCompany(e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all shadow-sm hover:border-gray-400"
-                    placeholder="Например: IT Solutions"
+                    placeholder={t.interviewForm.companyPlaceholder}
                   />
                 </div>
               </div>
             </section>
 
-            {/* Разделитель */}
             <div className="border-t border-gray-200" />
 
-            {/* Вопросы для кандидата */}
+            {/* AI generation */}
+            <section className="p-5 bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200 shadow-lg">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center shadow-md">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-bold text-gray-900">{t.interviewForm.aiGenerationTitle}</h4>
+                  <p className="text-sm text-gray-600">{t.interviewForm.aiGenerationDesc}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t.interviewForm.jobDescription}</label>
+                  <textarea
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white text-sm transition-all shadow-sm hover:border-blue-300 resize-none"
+                    placeholder={t.interviewForm.jobDescriptionPlaceholder}
+                    rows={4}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={generateQuestions}
+                    disabled={isGenerating}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm shadow-lg flex items-center gap-2"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span>{t.interviewForm.generating}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-5 h-5" />
+                        <span>{t.interviewForm.generateQuestions}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <div className="border-t border-gray-200" />
+
             <section>
               <div className="mb-4">
                 <h4 className="text-base font-semibold text-gray-900 mb-1">
-                  Базовые вопросы для первичного отбора <span className="text-red-500">*</span>
+                  {t.interviewForm.questionsTitle} <span className="text-red-500">{t.interviewForm.jobTitleRequired}</span>
                 </h4>
-                <p className="text-sm text-gray-500">
-                  Эти вопросы помогают оценить коммуникацию, опыт и мотивацию кандидата
-                </p>
+                <p className="text-sm text-gray-500">{t.interviewForm.questionsDesc}</p>
               </div>
               
               <div className="space-y-3 mb-4">
@@ -228,7 +357,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                             setQuestions(newQuestions);
                           }}
                           className="w-full bg-transparent border-none outline-none text-sm text-gray-800 font-medium mb-1 p-0 resize-none overflow-hidden"
-                          placeholder="Введите вопрос"
+                          placeholder={t.interviewForm.questionPlaceholder}
                           rows={1}
                           onInput={(e) => {
                             const target = e.target as HTMLTextAreaElement;
@@ -236,9 +365,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                             target.style.height = target.scrollHeight + 'px';
                           }}
                         />
-                        <p className="text-xs text-gray-500">
-                          Можно отредактировать под вашу вакансию
-                        </p>
+                        <p className="text-xs text-gray-500">{t.interviewForm.canEdit}</p>
                         
                         {/* Уточняющие вопросы для этого вопроса */}
                         {questionClarifications[index] && questionClarifications[index].length > 0 && (
@@ -277,7 +404,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                                   }
                                 }}
                                 className="flex-1 px-2 py-1.5 border border-blue-300 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                placeholder="Например: Можете подробнее рассказать об этом опыте?"
+                                placeholder={t.interviewForm.clarifyingPlaceholder}
                               />
                               <button
                                 type="button"
@@ -285,12 +412,10 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                                 className="px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 transition-colors flex items-center gap-1"
                               >
                                 <Plus className="w-3 h-3" />
-                                Добавить
+                                {t.interviewForm.addClarifying}
                               </button>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1.5">
-                              Робот может задать эти вопросы для уточнения ответа кандидата
-                            </p>
+                            <p className="text-xs text-gray-500 mt-1.5">{t.interviewForm.clarifyingDesc}</p>
                           </div>
                         )}
                       </div>
@@ -299,7 +424,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                           type="button"
                           onClick={() => toggleExpanded(index)}
                           className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all"
-                          title="Добавить уточняющие вопросы"
+                          title={t.interviewForm.addClarifying}
                         >
                           {expandedQuestions.has(index) ? (
                             <ChevronUp className="w-4 h-4" />
@@ -327,7 +452,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                   onChange={(e) => setQuestionInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addQuestion())}
                   className="flex-1 px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm transition-all shadow-sm hover:border-gray-400"
-                  placeholder="Добавить свой вопрос..."
+                  placeholder={t.interviewForm.addQuestionPlaceholder}
                 />
                 <button
                   type="button"
@@ -335,12 +460,10 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                   className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:shadow-md transition-all font-medium text-sm flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Добавить вопрос</span>
+                  <span>{t.interviewForm.addQuestion}</span>
                 </button>
               </div>
-              <p className="text-xs text-gray-500 text-center">
-                Рекомендуется 3–6 вопросов
-              </p>
+              <p className="text-xs text-gray-500 text-center">{t.interviewForm.recommended}</p>
             </section>
 
             {/* Разделитель */}
@@ -353,13 +476,9 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                   <div className="flex-1 pr-4">
                     <div className="flex items-center gap-2 mb-1">
                       <MessageSquare className="w-5 h-5 text-green-600" />
-                      <h4 className="text-base font-semibold text-gray-900">
-                        Дополнительные вопросы на усмотрение робота
-                      </h4>
+                      <h4 className="text-base font-semibold text-gray-900">{t.interviewForm.dynamicQuestionsTitle}</h4>
                     </div>
-                    <p className="text-sm text-gray-600">
-                      Робот может задавать дополнительные вопросы по ходу диалога на основе ответов кандидата для более глубокого понимания его опыта и компетенций
-                    </p>
+                    <p className="text-sm text-gray-600">{t.interviewForm.dynamicQuestionsDesc}</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                     <input
@@ -381,12 +500,8 @@ export function InterviewForm({ onClose, onCreate }: Props) {
             <section>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 pr-4">
-                  <h4 className="text-base font-semibold text-gray-900 mb-1">
-                    Моделирование реальной рабочей ситуации (опционально)
-                  </h4>
-                  <p className="text-sm text-gray-500">
-                    Используется для оценки реакции кандидата в стрессовой ситуации
-                  </p>
+                  <h4 className="text-base font-semibold text-gray-900 mb-1">{t.interviewForm.simulationTitle}</h4>
+                  <p className="text-sm text-gray-500">{t.interviewForm.simulationDesc}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                   <input
@@ -403,27 +518,22 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                 <div className="space-y-4 p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 shadow-sm">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Роль клиента
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t.interviewForm.roleLabel}</label>
                       <textarea
                         value={customerSimulationRole}
                         onChange={(e) => setCustomerSimulationRole(e.target.value)}
                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white text-sm transition-all shadow-sm hover:border-gray-400 resize-none"
-                        placeholder="Например: недовольный клиент, гость, заказчик"
+                        placeholder={t.interviewForm.rolePlaceholder}
                         rows={3}
                       />
                     </div>
-                    
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Описание сценария
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">{t.interviewForm.scenarioLabel}</label>
                       <textarea
                         value={customerSimulationScenario}
                         onChange={(e) => setCustomerSimulationScenario(e.target.value)}
                         className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none bg-white text-sm transition-all shadow-sm hover:border-gray-400"
-                        placeholder="Кратко опишите ситуацию, с которой кандидат может столкнуться на работе"
+                        placeholder={t.interviewForm.scenarioPlaceholder}
                         rows={3}
                       />
                     </div>
@@ -433,33 +543,23 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                   <div className="pt-4 border-t border-indigo-200">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full" />
-                      <h5 className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">
-                        Пример фрагмента диалога
-                      </h5>
+                      <h5 className="text-xs font-semibold text-indigo-900 uppercase tracking-wide">{t.interviewForm.exampleDialogTitle}</h5>
                     </div>
-                    
                     <div className="space-y-2.5">
-                      {/* AI as angry customer */}
                       <div className="flex gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center flex-shrink-0 shadow-md">
                           <AlertCircle className="w-4 h-4 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="bg-white rounded-lg px-3 py-2.5 border border-red-200 shadow-sm">
-                            <p className="text-xs text-gray-900 break-words font-medium">
-                              "Алло! Я уже ЖДУ неделю свой заказ! Обещали 3 дня, а прошло СЕМЬ! Это безобразие! Где мой заказ?!"
-                            </p>
+                            <p className="text-xs text-gray-900 break-words font-medium">{t.interviewForm.exampleCustomerMessage}</p>
                           </div>
                         </div>
                       </div>
-
-                      {/* Expected response */}
                       <div className="flex gap-2.5 justify-end">
                         <div className="flex-1 max-w-[85%] min-w-0">
                           <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg px-3 py-2.5 shadow-sm">
-                            <p className="text-xs text-white break-words">
-                              Понимаю ваше недовольство. Давайте я проверю статус вашего заказа прямо сейчас. Подскажите номер заказа?
-                            </p>
+                            <p className="text-xs text-white break-words">{t.interviewForm.exampleCandidateMessage}</p>
                           </div>
                         </div>
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
@@ -467,24 +567,18 @@ export function InterviewForm({ onClose, onCreate }: Props) {
                         </div>
                       </div>
                     </div>
-
-                    <p className="text-xs text-gray-600 mt-3 italic">
-                      Пример приведён для понимания формата. Реальный диалог формируется автоматически.
-                    </p>
-
+                    <p className="text-xs text-gray-600 mt-3 italic">{t.interviewForm.exampleNote}</p>
                     <div className="mt-3 p-3 bg-white rounded-lg border border-indigo-200 shadow-sm">
                       <div className="flex items-start gap-2.5">
                         <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0">
                           <HelpCircle className="w-3 h-3 text-white" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-indigo-900 font-semibold mb-1.5">
-                            Как это работает:
-                          </p>
+                          <p className="text-xs text-indigo-900 font-semibold mb-1.5">{t.interviewForm.howItWorksTitle}</p>
                           <ol className="text-xs text-indigo-800 space-y-1 list-decimal list-inside">
-                            <li>Кандидат отвечает на базовые вопросы</li>
-                            <li>Система моделирует рабочую ситуацию</li>
-                            <li>Вы получаете запись и краткую сводку для отбора</li>
+                            <li>{t.interviewForm.howItWorksStep1}</li>
+                            <li>{t.interviewForm.howItWorksStep2}</li>
+                            <li>{t.interviewForm.howItWorksStep3}</li>
                           </ol>
                         </div>
                       </div>
@@ -497,20 +591,22 @@ export function InterviewForm({ onClose, onCreate }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-200 p-5 bg-gradient-to-r from-gray-50 to-blue-50/30 flex-shrink-0">
-          <div className="flex gap-3 justify-end">
+        <div className="border-t border-gray-200 p-4 sm:p-5 bg-gradient-to-r from-gray-50 to-blue-50/30 flex-shrink-0">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end">
             <button
+              type="button"
               onClick={onClose}
               className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-all font-medium text-sm"
             >
-              Отмена
+              {t.interviewForm.cancel}
             </button>
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!position.trim()}
               className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm shadow-lg"
             >
-              Создать интервью
+              {t.interviewForm.create}
             </button>
           </div>
         </div>

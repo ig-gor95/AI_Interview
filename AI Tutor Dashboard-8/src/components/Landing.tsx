@@ -1,78 +1,39 @@
 import { ArrowRight, Sparkles, Target, Brain, Zap, MessageSquare, Video, TrendingUp, CheckCircle, Users, Settings, Clock, ThumbsUp, Filter, BarChart, ClipboardList, Headphones, Play, FileText, Link2, ListChecks, Shield, Lock, Phone, Coffee, Hotel, Scissors, HelpCircle } from 'lucide-react';
 import { AIAvatar } from './AIAvatar';
 import { Logo, LogoIcon } from './Logo';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { ITRequestModal } from './ITRequestModal';
 import { useState } from 'react';
+import { useAtom } from 'jotai';
+import { languageAtom, useTranslation } from '@/lib/i18n';
 
 interface Props {
   onNavigate: (view: 'login-organizer' | 'login-student' | 'evaluation-demo') => void;
+  onNavigateWithTab?: (view: 'evaluation-demo', tab: 'mass' | 'it') => void;
 }
 
-export function Landing({ onNavigate }: Props) {
+export function Landing({ onNavigate, onNavigateWithTab }: Props) {
   const [demoListening, setDemoListening] = useState(false);
   const [demoSpeaking, setDemoSpeaking] = useState(false);
   const [demoMessage, setDemoMessage] = useState('');
   const [demoStep, setDemoStep] = useState(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [showITRequestModal, setShowITRequestModal] = useState(false);
+  const [evaluationTab, setEvaluationTab] = useState<'mass' | 'it'>('mass');
+  const [language] = useAtom(languageAtom);
+  const t = useTranslation(language);
 
   const handleDemoInteraction = () => {
     setDemoStep(0);
     setDemoMessage('');
-    
-    // Step 1: AI приветствие
-    setTimeout(() => {
-      setDemoStep(1);
-      setDemoSpeaking(true);
-      setDemoMessage('Здравствуйте! Меня зовут София, я проведу с вами интервью. Расскажите, пожалуйста, о вашем опыте работы с клиентами.');
-    }, 500);
-
-    // Step 2: AI слушает ответ
-    setTimeout(() => {
-      setDemoSpeaking(false);
-      setDemoListening(true);
-      setDemoMessage('Я работал в кафе...'); 
-    }, 5000);
-
-    // Step 3: AI задает уточняющий вопрос
-    setTimeout(() => {
-      setDemoListening(false);
-      setDemoSpeaking(true);
-      setDemoMessage('Отлично! А с какими сложными ситуациями вы сталкивались при общении с гостями?');
-    }, 8000);
-
-    // Step 4: AI снова слушает
-    setTimeout(() => {
-      setDemoSpeaking(false);
-      setDemoListening(true);
-      setDemoMessage('Был случай с недовольным клиентом...');
-    }, 12000);
-
-    // Step 5: AI благодарит
-    setTimeout(() => {
-      setDemoListening(false);
-      setDemoSpeaking(true);
-      setDemoMessage('Спасибо! Как бы вы поступили, если гость жалуется на холодное блюдо?');
-    }, 15000);
-
-    // Step 6: Симуляция ситуации
-    setTimeout(() => {
-      setDemoSpeaking(false);
-      setDemoListening(true);
-      setDemoMessage('Я бы извинился и предложил...');
-    }, 19000);
-
-    // Step 7: Завершение
-    setTimeout(() => {
-      setDemoListening(false);
-      setDemoSpeaking(false);
-      setDemoMessage('Отлично! Интервью завершено.');
-      setDemoStep(0);
-    }, 22000);
-
-    // Полный сброс
-    setTimeout(() => {
-      setDemoMessage('');
-      setDemoStep(0);
-    }, 25000);
+    setTimeout(() => { setDemoStep(1); setDemoSpeaking(true); setDemoMessage(t.demo.greeting); }, 500);
+    setTimeout(() => { setDemoSpeaking(false); setDemoListening(true); setDemoMessage(t.demo.listening1); }, 5000);
+    setTimeout(() => { setDemoListening(false); setDemoSpeaking(true); setDemoMessage(t.demo.question1); }, 8000);
+    setTimeout(() => { setDemoSpeaking(false); setDemoListening(true); setDemoMessage(t.demo.listening2); }, 12000);
+    setTimeout(() => { setDemoListening(false); setDemoSpeaking(true); setDemoMessage(t.demo.question2); }, 15000);
+    setTimeout(() => { setDemoSpeaking(false); setDemoListening(true); setDemoMessage(t.demo.listening3); }, 19000);
+    setTimeout(() => { setDemoListening(false); setDemoSpeaking(false); setDemoMessage(t.demo.complete); setDemoStep(0); }, 22000);
+    setTimeout(() => { setDemoMessage(''); setDemoStep(0); }, 25000);
   };
 
   return (
@@ -85,22 +46,23 @@ export function Landing({ onNavigate }: Props) {
               <Logo size={48} />
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">ScreenMe</h1>
-                <p className="text-xs text-gray-500">AI-интервью</p>
+                <p className="text-xs text-gray-500">{t.nav.aiInterview}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
+              <LanguageSwitcher variant="light" size="sm" />
               <button
                 onClick={() => onNavigate('login-student')}
                 className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                Для кандидатов
+                {t.nav.forCandidates}
               </button>
               <button
                 onClick={() => onNavigate('login-organizer')}
                 className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300"
               >
-                Для организаторов
+                {t.nav.forOrganizers}
               </button>
             </div>
           </div>
@@ -121,52 +83,50 @@ export function Landing({ onNavigate }: Props) {
             <div>
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full mb-6 border border-blue-100">
                 <Sparkles className="w-4 h-4 text-blue-600" />
-                <span className="text-sm text-blue-700 font-medium">AI для рекрутинга</span>
+                <span className="text-sm text-blue-700 font-medium">{t.hero.badge}</span>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-                Сценарные собеседования
-                <br />
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                 <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  без участия HR
+                  {t.hero.title}
                 </span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-600 mb-8 leading-relaxed">
-                Массовый найм линейного персонала. Имитация реальных рабочих ситуаций по стандарту компании. 
-                Для любых сфер с массовым наймом.
+              <p className="text-lg sm:text-xl text-gray-600 mb-10 leading-relaxed">
+                {t.hero.subtitle}
               </p>
 
               <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <button
-                  onClick={() => onNavigate('login-organizer')}
-                  className="group px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-2xl hover:shadow-purple-500/40 transition-all duration-300 flex items-center justify-center gap-3"
+                  onClick={() => setShowITRequestModal(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300 font-semibold flex items-center justify-center gap-2"
                 >
-                  <span className="font-medium">Настроить интервью</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <Target className="w-5 h-5" />
+                  {t.hero.ctaPrimary}
+                  <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={handleDemoInteraction}
-                  className="px-8 py-4 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:border-purple-500 hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-3"
+                  onClick={() => onNavigate('login-organizer')}
+                  className="px-6 py-3 border-2 border-gray-400 text-gray-700 rounded-xl hover:border-gray-500 hover:bg-gray-50 transition-all duration-300 font-medium flex items-center justify-center gap-2"
                 >
-                  <Video className="w-5 h-5" />
-                  <span className="font-medium">Посмотреть демо</span>
+                  <Users className="w-5 h-5" />
+                  {t.hero.ctaSecondary}
+                  <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-4 sm:gap-8">
                 <div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">70%</div>
-                  <div className="text-xs sm:text-sm text-gray-600">Экономия времени</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{t.hero.stat1Value}</div>
+                  <div className="text-xs sm:text-sm text-gray-600">{t.hero.stat1Label}</div>
                 </div>
                 <div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">24/7</div>
-                  <div className="text-xs sm:text-sm text-gray-600">Интервью без выходных</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{t.hero.stat2Value}</div>
+                  <div className="text-xs sm:text-sm text-gray-600">{t.hero.stat2Label}</div>
                 </div>
                 <div>
-                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">100%</div>
-                  <div className="text-xs sm:text-sm text-gray-600">Охват кандидатов</div>
+                  <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{t.hero.stat3Value}</div>
+                  <div className="text-xs sm:text-sm text-gray-600">{t.hero.stat3Label}</div>
                 </div>
               </div>
             </div>
@@ -346,6 +306,60 @@ export function Landing({ onNavigate }: Props) {
           </div>
         </div>
       </section>
+
+      {/* Choice Section: Mass vs IT */}
+      {onNavigateWithTab && (
+        <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-100">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-10">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-full mb-4 border border-purple-100">
+                <span className="text-sm text-purple-700 font-medium">{t.choice.badge}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t.choice.title}</h2>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+              <div className="bg-blue-50/50 border-2 border-blue-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="w-5 h-5 text-blue-600" />
+                  <span className="text-xs text-blue-700 font-bold">{t.choice.massCard.title}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">{t.choice.massCard.subtitle}</p>
+                <ul className="space-y-2 text-sm mb-4">
+                  <li className="text-gray-700">• {t.choice.massCard.feature1}</li>
+                  <li className="text-gray-700">• {t.choice.massCard.feature2}</li>
+                  <li className="text-gray-700">• {t.choice.massCard.feature3}</li>
+                </ul>
+                <div className="text-2xl font-bold text-gray-900 mb-4">{t.choice.massCard.price}</div>
+                <button
+                  onClick={() => onNavigateWithTab('evaluation-demo', 'mass')}
+                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                >
+                  {t.choice.massCard.button}
+                </button>
+              </div>
+              <div className="bg-purple-50/50 border-2 border-purple-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="w-5 h-5 text-purple-600" />
+                  <span className="text-xs text-purple-700 font-bold">{t.choice.itCard.title}</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">{t.choice.itCard.subtitle}</p>
+                <ul className="space-y-2 text-sm mb-4">
+                  <li className="text-gray-700">• {t.choice.itCard.feature1}</li>
+                  <li className="text-gray-700">• {t.choice.itCard.feature2}</li>
+                  <li className="text-gray-700">• {t.choice.itCard.feature3}</li>
+                </ul>
+                <div className="text-xl font-bold text-gray-900 mb-4">{t.choice.itCard.price}</div>
+                <button
+                  onClick={() => onNavigateWithTab('evaluation-demo', 'it')}
+                  className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
+                >
+                  {t.choice.itCard.button}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* User Journey Section */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
@@ -918,6 +932,8 @@ export function Landing({ onNavigate }: Props) {
         </div>
       </section>
 
+      <ITRequestModal isOpen={showITRequestModal} onClose={() => setShowITRequestModal(false)} />
+
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-400 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -937,9 +953,15 @@ export function Landing({ onNavigate }: Props) {
               <button onClick={() => onNavigate('login-student')} className="hover:text-white transition-colors">
                 Для кандидатов
               </button>
-              <button onClick={() => onNavigate('evaluation-demo')} className="hover:text-white transition-colors">
-                Демо оценки
-              </button>
+              {onNavigateWithTab ? (
+                <button onClick={() => onNavigateWithTab('evaluation-demo', 'mass')} className="hover:text-white transition-colors">
+                  {t.footer.demoEvaluation}
+                </button>
+              ) : (
+                <button onClick={() => onNavigate('evaluation-demo')} className="hover:text-white transition-colors">
+                  {t.footer.demoEvaluation}
+                </button>
+              )}
             </div>
           </div>
 

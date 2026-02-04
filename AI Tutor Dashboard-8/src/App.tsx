@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { User, Session } from '@/types';
 import { getCurrentUser, login as authLogin, logout as authLogout, signup as authSignup } from './lib/auth';
 import { getSessions, getSessionById } from './lib/mockData';
@@ -143,11 +143,18 @@ function AppContent() {
 
   // Landing Page Component
   const LandingPage = () => {
-    return <Landing onNavigate={(view) => {
-      if (view === 'login-organizer') navigate('/login/organizer');
-      else if (view === 'login-student') navigate('/login/student');
-      else if (view === 'evaluation-demo') navigate('/evaluation-demo');
-    }} />;
+    return (
+      <Landing
+        onNavigate={(view) => {
+          if (view === 'login-organizer') navigate('/login/organizer');
+          else if (view === 'login-student') navigate('/login/student');
+          else if (view === 'evaluation-demo') navigate('/evaluation-demo');
+        }}
+        onNavigateWithTab={(view, tab) => {
+          if (view === 'evaluation-demo') navigate(`/evaluation-demo?tab=${tab}`);
+        }}
+      />
+    );
   };
 
   // Login Pages
@@ -226,10 +233,12 @@ function AppContent() {
     );
   };
 
-  // Evaluation Demo Page
-  const EvaluationDemoPage = () => (
-    <EvaluationDemo onBack={() => navigate('/')} />
-  );
+  // Evaluation Demo Page - tab from query: ?tab=mass | ?tab=it
+  const EvaluationDemoPage = () => {
+    const [searchParams] = useSearchParams();
+    const tab = (searchParams.get('tab') === 'it' ? 'it' : 'mass') as 'mass' | 'it';
+    return <EvaluationDemo evaluationTab={tab} onBack={() => navigate('/')} />;
+  };
 
   // Interview Registration Page (public)
   const InterviewRegistrationPage = () => {

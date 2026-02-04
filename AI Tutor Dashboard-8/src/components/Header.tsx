@@ -1,7 +1,10 @@
 import { User as UserType } from '@/types';
 import { LogOut, User, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { useAtom } from 'jotai';
+import { languageAtom, useTranslation } from '@/lib/i18n';
 import { Logo } from './Logo';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface Props {
   user: UserType | null;
@@ -11,6 +14,8 @@ interface Props {
 export function Header({ user, onLogout }: Props) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [language] = useAtom(languageAtom);
+  const t = useTranslation(language);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -37,12 +42,13 @@ export function Header({ user, onLogout }: Props) {
             <div>
               <h1 className="text-xl font-semibold text-gray-900">ScreenMe</h1>
               <p className="text-xs text-gray-500">
-                {user?.role === 'organizer' ? 'Кабинет организатора' : 'Кабинет ученика'}
+                {user?.role === 'organizer' ? t.header.organizerDashboard : t.header.candidateDashboard}
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
+            <LanguageSwitcher />
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -54,7 +60,7 @@ export function Header({ user, onLogout }: Props) {
                 <div className="hidden md:block text-left">
                   <p className="text-sm font-medium text-gray-900">{user?.name}</p>
                   <p className="text-xs text-gray-500">
-                    {user?.role === 'organizer' ? 'Организатор' : 'Ученик'}
+                    {user?.role === 'organizer' ? t.header.organizer : t.header.candidate}
                   </p>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showMenu ? 'rotate-180' : ''}`} />
@@ -74,7 +80,7 @@ export function Header({ user, onLogout }: Props) {
                     className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
-                    Выйти из аккаунта
+                    {t.dashboard.logout}
                   </button>
                 </div>
               )}

@@ -1,6 +1,6 @@
 import { ArrowLeft, Play, FileText, Pause, Volume2, MessageSquare, Phone, User, Bot, CheckCircle2, AlertCircle, XCircle, Square } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { Session, User as UserType } from '../types';
+import { Session, User as UserType, SessionResult } from '../types';
 import { resultsAPI } from '@/lib/api';
 import { scoreToQualityRating } from '@/lib/qualityRating';
 
@@ -8,6 +8,7 @@ interface Props {
   sessionId: string;
   session: Session | null;
   user: UserType | null;
+  mockResult?: SessionResult;
   onComplete: () => void;
   onBack: () => void;
 }
@@ -20,18 +21,23 @@ const DEFAULT_RECOMMENDATIONS = [
   'Обсудить ожидания по графику и развитию'
 ];
 
-export function CandidateEvaluation({ sessionId, session, user, onComplete, onBack }: Props) {
+export function CandidateEvaluation({ sessionId, session, user, mockResult, onComplete, onBack }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [checkedRecommendations, setCheckedRecommendations] = useState<Record<string, boolean>>({});
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<any>(mockResult ?? null);
   const [evaluation, setEvaluation] = useState<any>(null);
   const [interview, setInterview] = useState<any>(null);
   const [simulation, setSimulation] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!mockResult);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (mockResult) {
+      setResult(mockResult);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     async function load() {
       try {
@@ -54,7 +60,7 @@ export function CandidateEvaluation({ sessionId, session, user, onComplete, onBa
     }
     load();
     return () => { cancelled = true; };
-  }, [sessionId]);
+  }, [sessionId, mockResult]);
 
   const candidate = {
     name: result?.studentName || 'Кандидат',
