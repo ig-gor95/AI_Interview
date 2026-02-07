@@ -10,6 +10,19 @@ QualityRating = Literal['outstanding', 'strong', 'promising', 'suitable']
 RecommendationStatus = Literal['recommended', 'questionable', 'not-recommended']
 
 
+class CriterionResultResponse(BaseModel):
+    """Per-criterion evaluation result - passes/fails with fact from candidate answers"""
+    criterion_id: str = Field(alias="criterionId")
+    criterion_name: str = Field(alias="criterionName")
+    passes: bool
+    fact: Optional[str] = None
+    justification: Optional[str] = None
+    score: Optional[int] = None
+
+    class Config:
+        populate_by_name = True
+
+
 class SessionResult(BaseModel):
     """SessionResult schema - соответствует фронтенду types/index.ts"""
     id: str

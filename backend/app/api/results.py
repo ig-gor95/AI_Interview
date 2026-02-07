@@ -10,7 +10,13 @@ import uuid
 from app.database import get_db
 from app.models.user import User
 from app.models.interview import Interview
-from app.models.session import Session, SessionStatus, SessionEvaluation, SessionTranscript
+from app.models.session import (
+    Session,
+    SessionStatus,
+    SessionEvaluation,
+    SessionTranscript,
+    SessionEvaluationCriterionResult,
+)
 from app.models.simulation import SimulationScenario, SimulationDialog
 from app.core import openai_service
 from app.services.evaluation_service import generate_evaluation_from_transcript
@@ -236,6 +242,7 @@ async def get_candidate_detail(
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.improvements),
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.key_phrases),
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.observations),
+                selectinload(Session.evaluation).selectinload(SessionEvaluation.criterion_results).selectinload(SessionEvaluationCriterionResult.criterion),
                 selectinload(Session.transcript_messages),
                 selectinload(Session.interview).selectinload(Interview.config),
                 selectinload(Session.interview).selectinload(Interview.questions),
@@ -273,6 +280,18 @@ async def get_candidate_detail(
                     detail=f"Failed to generate evaluation: {str(gen_err)}"
                 )
         else:
+            criterion_results_list = []
+            for cr in getattr(evaluation, "criterion_results", []) or []:
+                criterion = getattr(cr, "criterion", None)
+                criterion_name = criterion.criterion_name if criterion else ""
+                criterion_results_list.append({
+                    "criterionId": str(cr.criterion_id),
+                    "criterionName": criterion_name,
+                    "passes": cr.passes,
+                    "fact": cr.fact,
+                    "justification": cr.justification,
+                    "score": cr.score,
+                })
             evaluation_details = {
                 "id": str(evaluation.id),
                 "overall_score": evaluation.overall_score,
@@ -289,6 +308,7 @@ async def get_candidate_detail(
                     {"category": obs.category, "text": obs.observation_text}
                     for obs in evaluation.observations
                 ],
+                "criterion_results": criterion_results_list,
             }
             score = evaluation.overall_score
             quality_rating = score_to_quality_rating(score)

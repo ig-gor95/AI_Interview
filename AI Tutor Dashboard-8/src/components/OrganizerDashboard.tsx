@@ -17,9 +17,10 @@ interface Props {
   sessions: Session[];
   onRefresh: () => void;
   onViewEvaluation?: (sessionId: string) => void;
+  onViewCandidates?: (interviewId: string) => void;
 }
 
-export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation }: Props) {
+export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation, onViewCandidates }: Props) {
   const [language] = useAtom(languageAtom);
   const t = useTranslation(language);
   const [activeTab, setActiveTab] = useState<'manage' | 'students'>('manage');
@@ -171,8 +172,12 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   };
 
   const handleViewCandidates = (interviewId: string) => {
-    setSelectedInterviewId(interviewId);
-    setActiveTab('students');
+    if (onViewCandidates) {
+      onViewCandidates(interviewId);
+    } else {
+      setSelectedInterviewId(interviewId);
+      setActiveTab('students');
+    }
   };
 
   return (

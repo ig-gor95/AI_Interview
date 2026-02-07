@@ -14,6 +14,7 @@ import { InterviewSessionView } from './components/InterviewSessionView';
 import { CandidateEvaluationWrapper } from './components/CandidateEvaluationWrapper';
 import { EvaluationDemo } from './components/EvaluationDemo';
 import { CandidateRegistration } from './components/CandidateRegistration';
+import { InterviewCandidatesPage } from './components/InterviewCandidatesPage';
 import { JotaiProvider } from './components/JotaiProvider';
 
 // User context wrapper
@@ -186,6 +187,7 @@ function AppContent() {
         sessions={sessions}
         onRefresh={refreshSessions}
         onViewEvaluation={(sessionId) => navigate(`/evaluation/${sessionId}`)}
+        onViewCandidates={(interviewId) => navigate(`/interview/${interviewId}/candidates`)}
       />
     ) : (
       <StudentDashboard 
@@ -257,7 +259,8 @@ function AppContent() {
     const shouldShowHeader = () => {
       return location.pathname.startsWith('/dashboard') || 
              location.pathname.startsWith('/session/') || 
-             location.pathname.startsWith('/evaluation/');
+             location.pathname.startsWith('/evaluation/') ||
+             /^\/interview\/[^/]+\/candidates$/.test(location.pathname);
     };
 
     return (
@@ -295,6 +298,14 @@ function AppContent() {
         <Route path="/evaluation-demo" element={<EvaluationDemoPage />} />
         <Route path="/interview/:token" element={<InterviewRegistrationPage />} />
         <Route path="/interview/:token/session" element={<InterviewSessionPage />} />
+        <Route 
+          path="/interview/:interviewId/candidates" 
+          element={
+            <ProtectedRoute>
+              <InterviewCandidatesPage />
+            </ProtectedRoute>
+          } 
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HeaderWrapper>

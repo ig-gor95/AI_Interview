@@ -276,7 +276,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
         </div>
       </div>
 
-      {/* Фильтры */}
+      {/* Фильтры (СВЕРХВАЖНО) */}
       <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-5 shadow-sm">
         <div className="flex flex-col gap-4">
           {/* Поиск и экспорт */}
@@ -302,6 +302,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
 
           {/* Фильтры */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {/* Статус */}
             <div>
               <label className="text-xs font-semibold text-gray-700 mb-2 block uppercase tracking-wide">{t.candidatesTab.status}</label>
               <select
@@ -322,6 +323,8 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
                 <option value="not-recommended">{t.candidatesTab.notRecommendedStatus} ({stats.notRecommended})</option>
               </select>
             </div>
+
+            {/* Рейтинг */}
             <div>
               <label className="text-xs font-semibold text-gray-700 mb-2 block uppercase tracking-wide">{t.candidatesTab.minRating}</label>
               <select
@@ -342,6 +345,8 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
                 <option value="9">9+ {t.candidatesTab.top}</option>
               </select>
             </div>
+
+            {/* Сортировка */}
             <div>
               <label className="text-xs font-semibold text-gray-700 mb-2 block uppercase tracking-wide">{t.candidatesTab.sorting}</label>
               <select
@@ -362,7 +367,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
             </div>
           </div>
 
-          {/* Чекбокс */}
+          {/* Чекбокс: только с проблемами */}
           <div className="pt-3 border-t border-gray-200">
             <label className="flex items-start sm:items-center gap-2.5 cursor-pointer group">
               <input
@@ -435,6 +440,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
                         {t.candidatesTab.communicationAndAnswers}
                       </p>
                     </div>
+                    {/* Статус - показываем рядом на мобильных */}
                     <div className="sm:hidden">
                       <div className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${statusConfig.border} ${statusConfig.bg}`}>
                         <StatusIcon className={`w-3.5 h-3.5 ${statusConfig.color}`} />
@@ -454,6 +460,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
                           {result.position || session?.params?.position || session?.params?.topic || 'AI Интервью'}
                         </p>
                       </div>
+                      {/* Иконка перехода */}
                       <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
                     </div>
 
@@ -533,7 +540,7 @@ export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEv
         </div>
       )}
 
-      {/* Disclaimer */}
+      {/* Disclaimer (КРИТИЧНО ДЛЯ ДОВЕРИЯ) */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />

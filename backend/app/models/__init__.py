@@ -21,6 +21,7 @@ from app.models.session import (
     SessionEvaluationStrength,
     SessionEvaluationImprovement,
     SessionEvaluationKeyPhrase,
+    SessionEvaluationCriterionResult,
     SessionStatus,
 )
 from app.models.simulation import (
@@ -56,6 +57,7 @@ __all__ = [
     "SessionEvaluationStrength",
     "SessionEvaluationImprovement",
     "SessionEvaluationKeyPhrase",
+    "SessionEvaluationCriterionResult",
     "SessionStatus",
     # Simulation
     "SimulationScenario",

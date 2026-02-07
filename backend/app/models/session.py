@@ -120,6 +120,7 @@ class SessionEvaluation(Base):
     strengths = relationship("SessionEvaluationStrength", back_populates="evaluation", cascade="all, delete-orphan", order_by="SessionEvaluationStrength.order_index")
     improvements = relationship("SessionEvaluationImprovement", back_populates="evaluation", cascade="all, delete-orphan", order_by="SessionEvaluationImprovement.order_index")
     key_phrases = relationship("SessionEvaluationKeyPhrase", back_populates="evaluation", cascade="all, delete-orphan", order_by="SessionEvaluationKeyPhrase.order_index")
+    criterion_results = relationship("SessionEvaluationCriterionResult", back_populates="evaluation", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<SessionEvaluation(id={self.id}, session_id={self.session_id}, score={self.overall_score})>"
@@ -193,4 +194,25 @@ class SessionEvaluationKeyPhrase(Base):
     
     def __repr__(self):
         return f"<SessionEvaluationKeyPhrase(id={self.id}, type={self.phrase_type})>"
+
+
+class SessionEvaluationCriterionResult(Base):
+    """Per-criterion evaluation result - passes/fails with fact from candidate answers"""
+    __tablename__ = "session_evaluation_criterion_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    evaluation_id = Column(UUID(as_uuid=True), ForeignKey("session_evaluations.id"), nullable=False, index=True)
+    criterion_id = Column(UUID(as_uuid=True), ForeignKey("interview_evaluation_criteria.id"), nullable=False, index=True)
+    passes = Column(Boolean, nullable=False)  # True = candidate meets criterion, False = does not
+    fact = Column(Text, nullable=True)  # fact from candidate's answers (e.g. "опыт 4 года")
+    justification = Column(Text, nullable=True)  # AI's reasoning
+    score = Column(Integer, nullable=True)  # 0-100 for backward compatibility
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    evaluation = relationship("SessionEvaluation", back_populates="criterion_results")
+    criterion = relationship("InterviewEvaluationCriterion", backref="evaluation_results")
+
+    def __repr__(self):
+        return f"<SessionEvaluationCriterionResult(id={self.id}, criterion_id={self.criterion_id}, passes={self.passes})>"
 

@@ -1,5 +1,6 @@
 """Evaluation service coordinating all analyzers"""
 import asyncio
+import uuid
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from app.models.session import (
     SessionEvaluationImprovement,
     SessionEvaluationKeyPhrase,
     SessionEvaluationObservation,
+    SessionEvaluationCriterionResult,
 )
 
 
@@ -192,7 +194,7 @@ async def generate_evaluation_from_transcript(
         interview = None
     
     session_params = {}
-    criteria_from_template = []
+    criteria_objs_sorted: List[Any] = []
     
     if interview:
         try:
@@ -236,7 +238,7 @@ async def generate_evaluation_from_transcript(
         parent_qs.sort(key=lambda x: getattr(x, 'order_index', 0))
         session_params["questions"] = [getattr(q, 'question_text', '') for q in parent_qs]
         
-        # Извлечь критерии оценки из шаблона интервью
+        # Извлечь критерии оценки из шаблона интервью (полные объекты с id для criterionResults)
         try:
             criteria_rel = interview.evaluation_criteria
             criteria_objs = list(criteria_rel) if criteria_rel else []
@@ -245,14 +247,26 @@ async def generate_evaluation_from_transcript(
         
         if criteria_objs:
             criteria_with_index = [
-                (getattr(c, 'criterion_name', str(c)), getattr(c, 'order_index', 0)) 
+                (c, getattr(c, 'order_index', 0))
                 for c in criteria_objs
             ]
             criteria_with_index.sort(key=lambda x: x[1])
-            criteria_from_template = [name for name, _ in criteria_with_index]
+            criteria_objs_sorted = [c for c, _ in criteria_with_index]
+        else:
+            criteria_objs_sorted = []
     
-    # Использовать критерии из шаблона или дефолтные
-    evaluation_criteria = criteria_from_template if criteria_from_template else ["communication", "relevance", "clarity", "professionalism"]
+    # Формат для analyze_transcript: List[dict] с id, criterion_name, is_required или List[str] для дефолтных
+    if criteria_objs_sorted:
+        evaluation_criteria = [
+            {
+                "id": str(getattr(c, "id", "")),
+                "criterion_name": getattr(c, "criterion_name", str(c)),
+                "is_required": getattr(c, "is_required", True),
+            }
+            for c in criteria_objs_sorted
+        ]
+    else:
+        evaluation_criteria = ["communication", "relevance", "clarity", "professionalism"]
     if isinstance(evaluation_criteria, str):
         evaluation_criteria = [evaluation_criteria]
     
@@ -324,15 +338,42 @@ async def generate_evaluation_from_transcript(
                 observation_text=str(text)[:2000],
             ))
     
-    # Сохранить оценки по критериям (из criterionScores)
+    # Сохранить оценки по критериям: новый формат criterionResults -> SessionEvaluationCriterionResult
+    criterion_ids_valid = {str(getattr(c, "id", "")) for c in criteria_objs_sorted if getattr(c, "id", None)}
+    criterion_results_raw = gpt_result.get("criterionResults") or []
+    for cr in criterion_results_raw:
+        if not isinstance(cr, dict):
+            continue
+        cid_raw = cr.get("criterionId") or cr.get("criterion_id")
+        if not cid_raw or str(cid_raw) not in criterion_ids_valid:
+            continue
+        try:
+            cid = uuid.UUID(str(cid_raw))
+        except (ValueError, TypeError):
+            continue
+        db.add(SessionEvaluationCriterionResult(
+            evaluation_id=eval_entity.id,
+            criterion_id=cid,
+            passes=bool(cr.get("passes", False)),
+            fact=(str(cr.get("fact", ""))[:2000] or None) if cr.get("fact") else None,
+            justification=(str(cr.get("justification", ""))[:2000] or None) if cr.get("justification") else None,
+            score=int(cr["score"]) if cr.get("score") is not None else None,
+        ))
+    
+    # Сохранить оценки по критериям (из criterionScores) для обратной совместимости:
+    # только для критериев без criterionResult (по имени)
+    criterion_results_by_id = {str(cr.get("criterionId") or cr.get("criterion_id")) for cr in criterion_results_raw if isinstance(cr, dict) and (cr.get("criterionId") or cr.get("criterion_id"))}
     criterion_scores = gpt_result.get("criterionScores") or {}
     for criterion_name, score_data in criterion_scores.items():
+        # Пропустить, если у нас уже есть criterionResult для критерия с этим id
+        name_to_id = {getattr(c, "criterion_name", ""): str(getattr(c, "id", "")) for c in criteria_objs_sorted}
+        if name_to_id.get(criterion_name) in criterion_results_by_id:
+            continue
         if isinstance(score_data, dict):
             score_val = score_data.get("score", 0)
             justification = score_data.get("justification", "")
             obs_text = f"Score: {score_val}. {justification}"[:2000]
         else:
-            # Fallback: если пришло просто число
             score_val = int(score_data) if isinstance(score_data, (int, float)) else 0
             obs_text = f"Score: {score_val}"[:2000]
         db.add(SessionEvaluationObservation(
@@ -362,7 +403,19 @@ async def generate_evaluation_from_transcript(
         if txt
     ]
     
-    # Добавить оценки по критериям в ответ
+    # Добавить оценки по критериям в ответ (criterionResults с passes, camelCase для API)
+    criterion_results_list = []
+    for cr in criterion_results_raw:
+        if isinstance(cr, dict):
+            criterion_results_list.append({
+                "criterionId": str(cr.get("criterionId") or cr.get("criterion_id", "")),
+                "criterionName": str(cr.get("criterionName") or cr.get("criterion_name", "")),
+                "passes": bool(cr.get("passes", False)),
+                "fact": (str(cr.get("fact", ""))[:500] or None) if cr.get("fact") else None,
+                "justification": (str(cr.get("justification", ""))[:500] or None) if cr.get("justification") else None,
+                "score": int(cr["score"]) if cr.get("score") is not None else None,
+            })
+    
     criterion_scores_list = []
     criterion_scores_raw = gpt_result.get("criterionScores") or {}
     for criterion_name, score_data in criterion_scores_raw.items():
@@ -390,6 +443,7 @@ async def generate_evaluation_from_transcript(
         "key_phrases": kp_effective + kp_to_improve,
         "observations": obs_list,
         "criterion_scores": criterion_scores_list,
+        "criterion_results": criterion_results_list,
         "recommendation_status": rec_status,
     }
 

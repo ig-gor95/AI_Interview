@@ -257,7 +257,7 @@ Your role:
         self,
         transcript: List[Dict[str, Any]],
         session_params: Dict[str, Any],
-        evaluation_criteria: List[str]
+        evaluation_criteria: Any  # List[str] or List[dict] with id, criterion_name, is_required
     ) -> Dict[str, Any]:
         """
         Analyze interview transcript using DeepSeek API for evaluation
@@ -265,18 +265,36 @@ Your role:
         Args:
             transcript: List of transcript messages
             session_params: Session configuration
-            evaluation_criteria: Criteria for evaluation
+            evaluation_criteria: List of criterion names (str) or List[dict] with id, criterion_name, is_required
             
         Returns:
-            Analysis results with observations, strengths, improvements
+            Analysis results with observations, strengths, improvements, criterionResults
         """
+        # Normalize criteria to list of dicts for processing
+        criteria_objs = []
+        criteria_names = []
+        for c in (evaluation_criteria or []):
+            if isinstance(c, dict):
+                criteria_objs.append({
+                    "id": str(c.get("id", "")),
+                    "criterion_name": c.get("criterion_name", str(c)),
+                    "is_required": c.get("is_required", True),
+                })
+                criteria_names.append(c.get("criterion_name", str(c)))
+            else:
+                criteria_objs.append({"id": "", "criterion_name": str(c), "is_required": True})
+                criteria_names.append(str(c))
+
         # Build transcript text
         transcript_text = "\n".join([
             f"{msg.get('role', 'unknown')}: {msg.get('message', '')}"
             for msg in transcript
         ])
         
-        criteria_list_str = ', '.join(evaluation_criteria)
+        criteria_list_str = '; '.join([
+            f"{c['criterion_name']} (обязательный)" if c['is_required'] else f"{c['criterion_name']} (желательный)"
+            for c in criteria_objs
+        ])
         position = session_params.get('position', 'N/A')
         company = session_params.get('company', '')
         goals = session_params.get('goals', [])
@@ -298,15 +316,24 @@ Focus Areas: {focus_areas_str}
 Expected Knowledge: {expected_knowledge_str}
 Evaluation Criteria: {criteria_list_str}
 
-Оцени кандидата по каждому критерию отдельно (0-100) и укажи обоснование для каждого."""
+For each criterion: (1) Determine if the candidate PASSES or FAILS based on their answers.
+(2) Extract the FACT from candidate's responses (e.g. "опыт 4 года" for experience requirement).
+(3) Provide a brief justification. Example: criterion "Опыт работы не менее 3 лет" + candidate said "4 года" -> passes: true, fact: "опыт 4 года", justification: "Кандидат соответствует требованию".
+Also provide a numeric score 0-100 for each criterion."""
         
-        criteria_json_example = ",\n        ".join([f'"{c}": {{"score": <0-100>, "justification": "<text>"}}' for c in evaluation_criteria])
+        criteria_json_example = ",\n        ".join([f'"{c["criterion_name"]}": {{"score": <0-100>, "justification": "<text>"}}' for c in criteria_objs])
+        criteria_with_ids = [c for c in criteria_objs if c.get("id")]
+        criterion_results_example = ",\n        ".join([
+            f'{{"criterionId": "{c["id"]}", "criterionName": "{c["criterion_name"]}", "passes": <true|false>, "fact": "<extracted from candidate>", "justification": "<brief>", "score": <0-100>}}'
+            for c in criteria_with_ids
+        ])
+        criterion_results_section = f',\n    "criterionResults": [\n        {criterion_results_example}\n    ]' if criterion_results_example else ""
         
         user_prompt = f"""Analyze this interview transcript and provide:
 
 1. Overall assessment score (0-100)
 2. Summary of the interview
-3. Score for each evaluation criterion (0-100) with justification
+3. For EACH evaluation criterion: passes (true/false), fact (what candidate said), justification, score (0-100)
 4. Observations by category (stressHandling, empathy, problemSolving, conflictResolution, communication)
 5. Strengths (at least 3)
 6. Areas for improvement (at least 2)
@@ -314,14 +341,14 @@ Evaluation Criteria: {criteria_list_str}
 8. Key phrases that could be improved
 9. Recommendation on readiness to work
 
-Format your response as JSON with the following structure:
+Format your response as JSON:
 {{
     "score": <number 0-100>,
     "summary": "<text>",
     "readiness": "<text>",
     "criterionScores": {{
         {criteria_json_example}
-    }},
+    }}{criterion_results_section},
     "observations": {{
         "stressHandling": "<observation>",
         "empathy": "<observation>",
@@ -369,8 +396,8 @@ Transcript:
                 pass
         
         # Fallback: return structured response
-        fallback_criterion_scores = {c: {"score": 50, "justification": "Evaluation incomplete"} for c in evaluation_criteria}
-        return {
+        fallback_criterion_scores = {c["criterion_name"]: {"score": 50, "justification": "Evaluation incomplete"} for c in criteria_objs}
+        fallback_result = {
             "score": 75,
             "summary": response[:500] if response else "Analysis completed",
             "readiness": "Further evaluation needed",
@@ -381,6 +408,12 @@ Transcript:
             "keyPhrases": {"effective": [], "toImprove": []},
             "recommendation": "Review transcript manually"
         }
+        if criteria_with_ids:
+            fallback_result["criterionResults"] = [
+                {"criterionId": c["id"], "criterionName": c["criterion_name"], "passes": False, "fact": None, "justification": "Evaluation incomplete", "score": 50}
+                for c in criteria_with_ids
+            ]
+        return fallback_result
 
     def analyze_answer_quality(
         self,
