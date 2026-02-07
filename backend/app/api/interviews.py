@@ -259,11 +259,19 @@ async def create_interview(
         db.add(simulation_scenario)
     
     await db.commit()
-    await db.refresh(new_interview)
-    
-    # Reload interview with relationships
-    await db.refresh(new_interview, ["questions", "config"])
-    
+
+    # Reload interview with relationships (eager load to avoid lazy load in async)
+    result = await db.execute(
+        select(Interview)
+        .options(
+            selectinload(Interview.questions),
+            selectinload(Interview.evaluation_criteria),
+            selectinload(Interview.config)
+        )
+        .where(Interview.id == new_interview.id)
+    )
+    new_interview = result.scalar_one()
+
     return SessionResponse(
         id=str(new_interview.id),
         organizer_id=str(new_interview.organizer_id),

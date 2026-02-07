@@ -133,17 +133,23 @@ export function InterviewForm({ onClose, onCreate }: Props) {
       return;
     }
     
-    // Формируем данные с учетом уточняющих вопросов
-    const hasAnyClarifications = Object.values(questionClarifications).some(arr => arr.length > 0);
+    // Преобразуем questions в формат API: { text, clarifyingQuestions? }[]
+    const questions = (formData.questions || []).map((text, index) => {
+      const clarifications = questionClarifications[index]?.filter(Boolean);
+      return {
+        text,
+        ...(clarifications?.length ? { clarifyingQuestions: clarifications } : {})
+      };
+    });
+
     onCreate({
       ...formData,
+      questions,
       mustHaveRequirements,
       niceToHaveRequirements,
       clarifyingQuestions: {
-        enabled: hasAnyClarifications,
-        example: hasAnyClarifications 
-          ? Object.values(questionClarifications).flat()[0] 
-          : ''
+        enabled: Object.values(questionClarifications).some(arr => arr?.length > 0),
+        example: Object.values(questionClarifications).flat().find(Boolean) || ''
       }
     });
   };
