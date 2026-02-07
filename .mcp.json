@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ai-interview": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/Users/igorlapin/PycharmProjects/AI_Interview/backend"
+    }
+  }
+}
