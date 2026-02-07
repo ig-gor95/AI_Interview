@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Copy, Check, ExternalLink, Calendar, User, CheckCircle, Circle, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Copy, Check, ExternalLink, Calendar, User, CheckCircle, Circle, Trash2, Download, Users } from 'lucide-react';
 import { Session, InterviewLink } from '@/types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,9 +8,10 @@ import { interviewsAPI } from '@/lib/api';
 interface Props {
   session: Session;
   onBack: () => void;
+  onViewCandidates?: (interviewId: string) => void;
 }
 
-export function InterviewLinksManager({ session, onBack }: Props) {
+export function InterviewLinksManager({ session, onBack, onViewCandidates }: Props) {
   const [links, setLinks] = useState<InterviewLink[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [generatingCount, setGeneratingCount] = useState(1);
@@ -138,6 +139,15 @@ export function InterviewLinksManager({ session, onBack }: Props) {
                 <p className="text-sm text-gray-600 mt-1">{session.params.company}</p>
               )}
               <p className="text-sm text-gray-500 mt-1">Управление ссылками для кандидатов</p>
+              {onViewCandidates && (
+                <Button
+                  onClick={() => onViewCandidates(session.id)}
+                  className="mt-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Кандидаты
+                </Button>
+              )}
             </div>
           </div>
 

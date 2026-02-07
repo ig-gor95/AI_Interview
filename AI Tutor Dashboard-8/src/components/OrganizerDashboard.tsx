@@ -67,22 +67,20 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     loadStatistics();
   }, [user.id]);
   
-  // Reload when switching to candidates tab
+  // Reload when switching to candidates tab or when selectedInterviewId changes
   useEffect(() => {
     if (activeTab === 'students') {
       loadResults();
       loadStatistics();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedInterviewId]);
   
   const loadResults = async () => {
     try {
       setIsLoadingResults(true);
-      console.log('[OrganizerDashboard] Loading candidates from API...');
-      const candidatesResponse = await resultsAPI.getCandidates();
-      console.log('[OrganizerDashboard] Received candidates:', candidatesResponse);
+      const params = selectedInterviewId ? { interview_id: selectedInterviewId } : undefined;
+      const candidatesResponse = await resultsAPI.getCandidates(params);
       const candidates = candidatesResponse.results || [];
-      console.log(`[OrganizerDashboard] Setting ${candidates.length} candidates`);
       setResults(candidates);
     } catch (error) {
       console.error('[OrganizerDashboard] Ошибка при загрузке результатов:', error);
@@ -183,6 +181,10 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
         <InterviewLinksManager 
           session={selectedSessionForLinks}
           onBack={() => setSelectedSessionForLinks(null)}
+          onViewCandidates={(id) => {
+            setSelectedSessionForLinks(null);
+            handleViewCandidates(id);
+          }}
         />
       ) : (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
@@ -408,13 +410,16 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
 
                       <div className="flex flex-col gap-2 sm:items-end">
                         <button
+                          type="button"
                           onClick={() => handleViewCandidates(session.id)}
-                          className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm whitespace-nowrap"
+                          className="px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-2 text-sm whitespace-nowrap hover:opacity-90"
+                          style={{ backgroundColor: '#059669', color: 'white' }}
                         >
-                          <Users className="w-4 h-4" />
+                          <Users className="w-4 h-4" style={{ color: 'white' }} />
                           <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => setSelectedSessionForLinks(session)}
                           className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm whitespace-nowrap"
                         >
@@ -470,6 +475,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                 sessions={sessions}
                 selectedInterviewId={selectedInterviewId}
                 onViewEvaluation={onViewEvaluation}
+                onClearSelection={() => setSelectedInterviewId(null)}
               />
             )}
           </>
