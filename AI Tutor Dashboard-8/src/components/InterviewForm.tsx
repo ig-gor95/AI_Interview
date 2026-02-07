@@ -267,11 +267,12 @@ export function InterviewForm({ onClose, onCreate }: Props) {
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-50"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 z-50 overflow-y-auto"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-xl max-w-5xl w-full flex flex-col shadow-2xl overflow-hidden shrink-0 my-auto"
+        style={{ height: 'calc(100vh - 1.5rem)', maxHeight: 'calc(100vh - 1.5rem)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
@@ -297,7 +298,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
         </div>
 
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-6">
           <div className="space-y-8">
             {/* Основная информация */}
             <section>
