@@ -912,10 +912,10 @@ export function InterviewSessionView() {
     };
   }, []);
 
-  // Scroll chat to bottom
+  // Scroll chat to bottom when messages or interim transcript changes
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
+  }, [transcript, interimTranscript]);
 
   // Format time
   const formatTime = (seconds: number) => {

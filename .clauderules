@@ -1,0 +1,38 @@
+# Claude Code Rules for AI Interview Project
+
+## Git Workflow
+
+### Automatic Git Add for New Files
+- ALWAYS add newly created files to git staging area immediately after creation
+- Use `git add <filepath>` right after using Write tool to create a new file
+- Exception: temporary files, logs, or files in .gitignore
+
+### Git Add Guidelines
+- When creating new files (using Write tool), immediately add them to git
+- When modifying existing files, add them to git if requested by user or when completing a feature
+- Always check git status before and after operations to ensure files are tracked
+
+## Code Style
+
+### Python (Backend)
+- Follow PEP 8 style guide
+- Use type hints where appropriate
+- Add docstrings for functions and classes
+- Use async/await for asynchronous operations
+
+### TypeScript/React (Frontend)
+- Use functional components with hooks
+- Follow existing naming conventions (camelCase for variables, PascalCase for components)
+- Use TypeScript strict mode
+- Maintain existing i18n structure for translations
+
+## Project Structure
+- Backend: Python FastAPI application in `/backend`
+- Frontend: React TypeScript application in `/AI Tutor Dashboard-8`
+- Keep separation between backend and frontend concerns
+- Use existing API patterns when adding new endpoints
+
+## Communication
+- Be concise and clear in responses
+- Focus on what was done rather than time estimates
+- Ask clarifying questions when requirements are unclear

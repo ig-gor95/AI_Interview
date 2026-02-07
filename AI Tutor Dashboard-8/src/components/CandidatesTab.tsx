@@ -20,13 +20,14 @@ interface Result {
 interface Props {
   results: Result[];
   sessions: Session[];
+  selectedInterviewId?: string | null;
   onViewEvaluation?: (sessionId: string) => void;
 }
 
 // Строго 3 статуса согласно спеке
 type RecommendationStatus = 'recommended' | 'questionable' | 'not-recommended';
 
-export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
+export function CandidatesTab({ results, sessions, selectedInterviewId, onViewEvaluation }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RecommendationStatus>('all');
   const [ratingFilter, setRatingFilter] = useState<[number, number]>([0, 10]);
@@ -119,6 +120,11 @@ export function CandidatesTab({ results, sessions, onViewEvaluation }: Props) {
   // Фильтрация
   const filteredResults = results
     .filter(r => {
+      // Фильтр по выбранному интервью
+      if (selectedInterviewId && r.sessionId !== selectedInterviewId) {
+        return false;
+      }
+
       // Поиск
       if (searchQuery) {
         const query = searchQuery.toLowerCase();

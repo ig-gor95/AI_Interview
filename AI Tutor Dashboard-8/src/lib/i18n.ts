@@ -461,6 +461,8 @@ export interface Translations {
     uniqueLinks: string;
     testLink: string;
     copied: string;
+    candidatesButton: string;
+    backToInterviews: string;
     passInterview: string;
     testLabel: string;
     beginnerLevel: string;
@@ -1214,6 +1216,8 @@ export const translations: Record<Language, Translations> = {
       uniqueLinks: 'Уникальные ссылки',
       testLink: 'Тестовая ссылка',
       copied: 'Скопировано!',
+      candidatesButton: 'Кандидаты',
+      backToInterviews: 'Назад к интервью',
       passInterview: 'Пройти интервью',
       testLabel: 'ТЕСТ',
       beginnerLevel: 'Начальный',
@@ -1953,6 +1957,8 @@ export const translations: Record<Language, Translations> = {
       uniqueLinks: 'Unique Links',
       testLink: 'Test Link',
       copied: 'Copied!',
+      candidatesButton: 'Candidates',
+      backToInterviews: 'Back to Interviews',
       passInterview: 'Take Interview',
       testLabel: 'TEST',
       beginnerLevel: 'Beginner',

@@ -39,6 +39,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   const [sortBy, setSortBy] = useState<'date' | 'rating' | 'name'>('date');
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [candidateStatuses, setCandidateStatuses] = useState<Record<string, string>>({});
+  const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
 
   // Filter sessions and validate UUID format
   const userSessions = sessions.filter(s => {
@@ -171,6 +172,11 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     });
   };
 
+  const handleViewCandidates = (interviewId: string) => {
+    setSelectedInterviewId(interviewId);
+    setActiveTab('students');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {selectedSessionForLinks ? (
@@ -264,32 +270,20 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg border border-gray-200 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('manage')}
-            className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all flex items-center justify-center gap-2 text-xs sm:text-sm whitespace-nowrap ${
-              activeTab === 'manage'
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span className="hidden sm:inline">{t.organizerDashboard.managementTab}</span>
-            <span className="sm:hidden">{t.organizerDashboard.managementTab}</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('students')}
-            className={`flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 rounded-lg transition-all flex items-center justify-center gap-2 text-xs sm:text-sm whitespace-nowrap ${
-              activeTab === 'students'
-                ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
-            <span>{t.organizerDashboard.candidatesTab}</span>
-          </button>
-        </div>
+        {/* Tabs - removed separate Candidates tab, now accessed via interview cards */}
+        {activeTab === 'students' && (
+          <div className="mb-6">
+            <button
+              onClick={() => {
+                setActiveTab('manage');
+                setSelectedInterviewId(null);
+              }}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 flex items-center gap-2"
+            >
+              <span>← {t.organizerDashboard.backToInterviews || 'Назад к интервью'}</span>
+            </button>
+          </div>
+        )}
 
         {/* Create Form Modal */}
         {showCreateForm && (
@@ -414,6 +408,13 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
 
                       <div className="flex flex-col gap-2 sm:items-end">
                         <button
+                          onClick={() => handleViewCandidates(session.id)}
+                          className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm whitespace-nowrap"
+                        >
+                          <Users className="w-4 h-4" />
+                          <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
+                        </button>
+                        <button
                           onClick={() => setSelectedSessionForLinks(session)}
                           className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm whitespace-nowrap"
                         >
@@ -467,6 +468,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <CandidatesTab
                 results={results}
                 sessions={sessions}
+                selectedInterviewId={selectedInterviewId}
                 onViewEvaluation={onViewEvaluation}
               />
             )}
