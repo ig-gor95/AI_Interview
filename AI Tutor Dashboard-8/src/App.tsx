@@ -11,7 +11,7 @@ import { OrganizerDashboard } from './components/OrganizerDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { SessionView } from './components/SessionView';
 import { InterviewSessionView } from './components/InterviewSessionView';
-import { CandidateEvaluation } from './components/CandidateEvaluation';
+import { CandidateEvaluationWrapper } from './components/CandidateEvaluationWrapper';
 import { EvaluationDemo } from './components/EvaluationDemo';
 import { CandidateRegistration } from './components/CandidateRegistration';
 import { JotaiProvider } from './components/JotaiProvider';
@@ -223,7 +223,7 @@ function AppContent() {
     }
 
     return (
-      <CandidateEvaluation
+      <CandidateEvaluationWrapper
         sessionId={sessionId}
         session={session}
         user={user}
