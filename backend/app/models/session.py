@@ -203,7 +203,7 @@ class SessionEvaluationCriterionResult(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     evaluation_id = Column(UUID(as_uuid=True), ForeignKey("session_evaluations.id"), nullable=False, index=True)
     criterion_id = Column(UUID(as_uuid=True), ForeignKey("interview_evaluation_criteria.id"), nullable=False, index=True)
-    passes = Column(Boolean, nullable=False)  # True = candidate meets criterion, False = does not
+    passes = Column(Integer, nullable=False, default=0)  # 1 = подходит, 0 = возможно подойдет, -1 = не подходит
     fact = Column(Text, nullable=True)  # fact from candidate's answers (e.g. "опыт 4 года")
     justification = Column(Text, nullable=True)  # AI's reasoning
     score = Column(Integer, nullable=True)  # 0-100 for backward compatibility

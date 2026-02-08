@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Session, User as UserType, SessionResult } from '../types';
 import { resultsAPI } from '@/lib/api';
 import { scoreToQualityRating } from '@/lib/qualityRating';
@@ -20,6 +20,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   const [simulation, setSimulation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(!mockResult);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (mockResult) {
@@ -27,6 +28,8 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
       setIsLoading(false);
       return;
     }
+    if (fetchedRef.current === sessionId) return;
+    fetchedRef.current = sessionId;
     let cancelled = false;
     async function load() {
       try {
@@ -42,6 +45,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+          fetchedRef.current = null;
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -96,12 +100,12 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
     numericRating >= 5.0 ? 'possible' :
     'not_recommended';
 
-  // Extract requirement checks from evaluation
-  const requirementChecks = evaluation?.criterionScores
-    ? Object.entries(evaluation.criterionScores).map(([requirement, data]: [string, any]) => ({
-        requirement,
-        fact: data.justification || 'Нет данных',
-        status: (data.score >= 70 ? 'met' : data.score >= 40 ? 'partial' : 'not_met') as 'met' | 'partial' | 'not_met'
+  // Extract requirement checks from evaluation criterion_results (backend format)
+  const requirementChecks = evaluation?.criterion_results?.length
+    ? evaluation.criterion_results.map((cr: any) => ({
+        requirement: cr.criterionName || '',
+        fact: cr.fact || cr.justification || 'Нет данных',
+        status: (cr.passes === 1 ? 'met' : cr.passes === 0 ? 'partial' : 'not_met') as 'met' | 'partial' | 'not_met'
       }))
     : interview?.evaluation_criteria?.map((criterion: any) => ({
         requirement: criterion.criterion_name,
@@ -120,14 +124,14 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
       ? 'Кандидат показал базовые навыки. Рекомендуется дополнительное собеседование для уточнения компетенций.'
       : 'Кандидат не соответствует минимальным требованиям для данной позиции.');
 
-  // Transform criteria
-  const criteria = evaluation?.criterionScores
-    ? Object.entries(evaluation.criterionScores).map(([name, data]: [string, any]) => ({
-        name,
-        score: data.score || 0,
+  // Transform criteria from criterion_results
+  const criteria = evaluation?.criterion_results?.length
+    ? evaluation.criterion_results.map((cr: any) => ({
+        name: cr.criterionName || '',
+        score: cr.score || 0,
         maxScore: 100,
-        notes: [data.justification || 'Нет комментариев'],
-        specificFacts: [data.justification || 'Нет данных']
+        notes: [cr.justification || 'Нет комментариев'],
+        specificFacts: [cr.fact || 'Нет данных']
       }))
     : [];
 

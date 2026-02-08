@@ -354,7 +354,7 @@ async def generate_evaluation_from_transcript(
         db.add(SessionEvaluationCriterionResult(
             evaluation_id=eval_entity.id,
             criterion_id=cid,
-            passes=bool(cr.get("passes", False)),
+            passes=max(-1, min(1, int(cr.get("passes", 0)))),
             fact=(str(cr.get("fact", ""))[:2000] or None) if cr.get("fact") else None,
             justification=(str(cr.get("justification", ""))[:2000] or None) if cr.get("justification") else None,
             score=int(cr["score"]) if cr.get("score") is not None else None,

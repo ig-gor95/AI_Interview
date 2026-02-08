@@ -316,15 +316,18 @@ Focus Areas: {focus_areas_str}
 Expected Knowledge: {expected_knowledge_str}
 Evaluation Criteria: {criteria_list_str}
 
-For each criterion: (1) Determine if the candidate PASSES or FAILS based on their answers.
+For each criterion: (1) Determine if the candidate meets the criterion using a 3-level scale:
+  1 = подходит (clearly meets the criterion)
+  0 = возможно подойдет (partially meets or unclear)
+  -1 = не подходит (does not meet the criterion)
 (2) Extract the FACT from candidate's responses (e.g. "опыт 4 года" for experience requirement).
-(3) Provide a brief justification. Example: criterion "Опыт работы не менее 3 лет" + candidate said "4 года" -> passes: true, fact: "опыт 4 года", justification: "Кандидат соответствует требованию".
+(3) Provide a brief justification. Example: criterion "Опыт работы не менее 3 лет" + candidate said "4 года" -> passes: 1, fact: "опыт 4 года", justification: "Кандидат соответствует требованию".
 Also provide a numeric score 0-100 for each criterion."""
         
         criteria_json_example = ",\n        ".join([f'"{c["criterion_name"]}": {{"score": <0-100>, "justification": "<text>"}}' for c in criteria_objs])
         criteria_with_ids = [c for c in criteria_objs if c.get("id")]
         criterion_results_example = ",\n        ".join([
-            f'{{"criterionId": "{c["id"]}", "criterionName": "{c["criterion_name"]}", "passes": <true|false>, "fact": "<extracted from candidate>", "justification": "<brief>", "score": <0-100>}}'
+            f'{{"criterionId": "{c["id"]}", "criterionName": "{c["criterion_name"]}", "passes": "<-1|0|1>", "fact": "<extracted from candidate>", "justification": "<brief>", "score": <0-100>}}'
             for c in criteria_with_ids
         ])
         criterion_results_section = f',\n    "criterionResults": [\n        {criterion_results_example}\n    ]' if criterion_results_example else ""
@@ -333,7 +336,7 @@ Also provide a numeric score 0-100 for each criterion."""
 
 1. Overall assessment score (0-100)
 2. Summary of the interview
-3. For EACH evaluation criterion: passes (true/false), fact (what candidate said), justification, score (0-100)
+3. For EACH evaluation criterion: passes (1=подходит, 0=возможно, -1=не подходит), fact (what candidate said), justification, score (0-100)
 4. Observations by category (stressHandling, empathy, problemSolving, conflictResolution, communication)
 5. Strengths (at least 3)
 6. Areas for improvement (at least 2)

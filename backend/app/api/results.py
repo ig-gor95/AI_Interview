@@ -246,6 +246,7 @@ async def get_candidate_detail(
                 selectinload(Session.transcript_messages),
                 selectinload(Session.interview).selectinload(Interview.config),
                 selectinload(Session.interview).selectinload(Interview.questions),
+                selectinload(Session.interview).selectinload(Interview.evaluation_criteria),
                 selectinload(Session.simulation_scenario).selectinload(SimulationScenario.dialog)
             )
         )
@@ -350,10 +351,19 @@ async def get_candidate_detail(
         if interview := getattr(session, "interview", None):
             parent_qs = [q for q in (getattr(interview, "questions", None) or []) if not getattr(q, "parent_question_id", None)]
             parent_qs.sort(key=lambda x: getattr(x, "order_index", 0))
+            eval_criteria = getattr(interview, "evaluation_criteria", None) or []
             interview_info = {
                 "position": getattr(interview, "position", None) or "",
                 "company": getattr(interview, "company", None),
                 "questions": [getattr(q, "question_text", "") for q in parent_qs],
+                "evaluation_criteria": [
+                    {
+                        "id": str(ec.id),
+                        "criterion_name": ec.criterion_name,
+                        "is_required": getattr(ec, "is_required", True),
+                    }
+                    for ec in eval_criteria
+                ],
             }
 
         simulation_info = None
