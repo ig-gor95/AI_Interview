@@ -239,10 +239,10 @@ def test_tts_service():
                 # Проверка голоса
                 if hasattr(tts_service, 'voice_name'):
                     voice = tts_service.voice_name
-                    if voice in ["ru-RU-Chirp3-HD-Kore", "ru-RU-Chirp3-HD-Aoede"]:
-                        test_passed(f"Голос выбран случайно: {voice}")
+                    if voice == settings.google_cloud_voice_name:
+                        test_passed(f"Голос из конфигурации: {voice}")
                     else:
-                        test_passed(f"Голос: {voice}")
+                        test_warning(f"Голос '{voice}' не совпадает с конфигурацией '{settings.google_cloud_voice_name}'")
         else:
             print_info(f"TTS отключен (tts_service={settings.tts_service})")
         

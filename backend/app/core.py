@@ -1,5 +1,4 @@
 """Core application initialization"""
-import random
 from app.analyzers import create_analyzer_registry, AnalyzerRegistry
 from app.services.evaluation_service import EvaluationService
 from app.services.openai_service import AIService
@@ -16,19 +15,15 @@ openai_service = AIService()
 google_cloud_tts_service = None
 if settings.google_cloud_credentials_path or settings.tts_service == "google":
     try:
-        # Randomly select between Kore and Aoede voices
-        available_voices = ["ru-RU-Chirp3-HD-Kore", "ru-RU-Chirp3-HD-Aoede"]
-        selected_voice = random.choice(available_voices)
-        
         google_cloud_tts_service = GoogleCloudTTSService(
             credentials_path=settings.google_cloud_credentials_path,
-            voice_name=selected_voice,  # Use randomly selected voice
+            voice_name=settings.google_cloud_voice_name,
             language_code=settings.google_cloud_voice_language,
             speaking_rate=settings.google_cloud_speaking_rate,
             pitch=settings.google_cloud_pitch
         )
         print(f"[Core] Google Cloud TTS service initialized:")
-        print(f"  Voice: {selected_voice} (randomly selected from {available_voices})")
+        print(f"  Voice: {settings.google_cloud_voice_name}")
         print(f"  Speaking rate: {settings.google_cloud_speaking_rate}")
         print(f"  Pitch: {settings.google_cloud_pitch} semitones")
     except Exception as e:

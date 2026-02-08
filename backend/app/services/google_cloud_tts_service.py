@@ -1,7 +1,6 @@
 """Google Cloud Text-to-Speech service for natural Russian speech"""
 
 import os
-import random
 from typing import Optional
 from google.cloud import texttospeech
 
@@ -48,7 +47,7 @@ class GoogleCloudTTSService:
         
         return normalized
 
-    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Chirp3-HD-Fenrir", language_code: str = "ru-RU", speaking_rate: float = 1.0, pitch: float = 0.0):
+    def __init__(self, credentials_path: Optional[str] = None, voice_name: str = "ru-RU-Wavenet-B", language_code: str = "ru-RU", speaking_rate: float = 1.0, pitch: float = 0.0):
         # Set credentials path if provided
         if credentials_path:
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
@@ -151,13 +150,9 @@ class GoogleCloudTTSService:
             Audio bytes in MP3 format
         """
         try:
-            # If no voice_name specified, randomly choose between Kore and Aoede
+            # Use configured voice if not explicitly provided
             if voice_name is None:
-                available_voices = ["ru-RU-Chirp3-HD-Kore", "ru-RU-Chirp3-HD-Aoede"]
-                voice_name = random.choice(available_voices)
-                print(f"[GoogleCloudTTS] Randomly selected voice: {voice_name}")
-            else:
-                voice_name = voice_name  # Use explicitly provided voice
+                voice_name = self.voice_name
             
             language_code = language_code or self.language_code
             # Normalize language code to BCP-47 format (e.g., "ru" -> "ru-RU")
