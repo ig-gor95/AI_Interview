@@ -8,6 +8,7 @@ from app.schemas.interview import TranscriptMessage
 # Quality rating type matching frontend
 QualityRating = Literal['outstanding', 'strong', 'promising', 'suitable']
 RecommendationStatus = Literal['recommended', 'questionable', 'not-recommended']
+EvaluationStatusType = Literal['pending', 'in_progress', 'completed', 'failed']
 
 
 class CriterionResultResponse(BaseModel):
@@ -33,10 +34,12 @@ class SessionResult(BaseModel):
     started_at: datetime = Field(alias="startedAt")
     completed_at: Optional[datetime] = Field(None, alias="completedAt")
     transcript: List[TranscriptMessage] = []
+    transcript_count: Optional[int] = Field(None, alias="transcriptCount")
     summary: Optional[str] = None
     score: Optional[int] = None
     quality_rating: Optional[QualityRating] = Field(None, alias="qualityRating")
-    
+    evaluation_status: EvaluationStatusType = Field(default='pending', alias="evaluationStatus")
+
     class Config:
         from_attributes = True
         populate_by_name = True
@@ -68,7 +71,8 @@ class CandidateListItemResponse(BaseModel):
     transcript_count: Optional[int] = Field(None, alias="transcriptCount")
     user_message_count: Optional[int] = Field(None, alias="userMessageCount")
     position: Optional[str] = None
-    
+    evaluation_status: EvaluationStatusType = Field(default='pending', alias="evaluationStatus")
+
     class Config:
         populate_by_name = True
 

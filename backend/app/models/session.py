@@ -17,6 +17,14 @@ class SessionStatus(str, enum.Enum):
     ABANDONED = "abandoned"  # прервана
 
 
+class EvaluationStatus(str, enum.Enum):
+    """Evaluation generation status enum"""
+    PENDING = "pending"  # evaluation not started
+    IN_PROGRESS = "in_progress"  # AI is generating evaluation
+    COMPLETED = "completed"  # evaluation completed successfully
+    FAILED = "failed"  # evaluation generation failed
+
+
 class Session(Base):
     """Session model - Concrete interview session with candidate"""
     __tablename__ = "sessions"  # будет переименовано из interviews через миграцию
@@ -28,6 +36,7 @@ class Session(Base):
     candidate_email = Column(String(255), nullable=True)  # email кандидата
     candidate_surname = Column(String(255), nullable=True)  # фамилия кандидата
     status = Column(Enum(SessionStatus), nullable=False, default=SessionStatus.PENDING, index=True)
+    evaluation_status = Column(Enum(EvaluationStatus), nullable=False, default=EvaluationStatus.PENDING, index=True)  # AI evaluation generation status
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     audio_file_path = Column(String(1000), nullable=True)  # путь к аудио записи

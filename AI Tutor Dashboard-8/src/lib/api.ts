@@ -225,6 +225,22 @@ export const resultsAPI = {
       };
     }>(`/results/candidates/${sessionId}`);
   },
+
+  async getCandidateTranscript(sessionId: string, offset: number = 0, limit: number = 50) {
+    return apiRequest<{
+      messages: Array<{
+        role: string;
+        message: string;
+        timestamp?: string;
+        audioUrl?: string;
+        orderIndex?: number;
+      }>;
+      total: number;
+      offset: number;
+      limit: number;
+      hasMore: boolean;
+    }>(`/results/candidates/${sessionId}/transcript?offset=${offset}&limit=${limit}`);
+  },
 };
 
 // Public API (no authentication required)

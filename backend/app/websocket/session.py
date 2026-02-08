@@ -1062,9 +1062,10 @@ async def _generate_evaluation_background(session_id: str):
     from app.database import AsyncSessionLocal
     from app.core import openai_service
     from app.services.evaluation_service import generate_evaluation_from_transcript
+    from app.models.session import EvaluationStatus
     from sqlalchemy.orm import selectinload
     from sqlalchemy import select
-    
+
     async with AsyncSessionLocal() as bg_db:
         try:
             result = await bg_db.execute(
@@ -1081,6 +1082,10 @@ async def _generate_evaluation_background(session_id: str):
             if not session_for_eval:
                 print(f"[SessionEnd] Session {session_id} not found, skipping evaluation")
                 return
+
+            # Set evaluation status to IN_PROGRESS
+            session_for_eval.evaluation_status = EvaluationStatus.IN_PROGRESS
+            await bg_db.commit()
             
             # Явно загрузить все relationships в память сразу после запроса, чтобы избежать lazy loading
             # Это критически важно для предотвращения ошибки "greenlet_spawn has not been called"
@@ -1114,13 +1119,23 @@ async def _generate_evaluation_background(session_id: str):
                     db=bg_db,
                     ai_service=openai_service,
                 )
+
+                # Set evaluation status to COMPLETED on success
+                session_for_eval.evaluation_status = EvaluationStatus.COMPLETED
+                await bg_db.commit()
+                print(f"[SessionEnd] Background evaluation generated for session {session_id}")
+
             except Exception as eval_err:
                 # Если произошла ошибка при загрузке данных, логируем и пропускаем
                 print(f"[SessionEnd] Error loading session data for evaluation: {eval_err}")
                 import traceback
                 traceback.print_exc()
+
+                # Set evaluation status to FAILED on error
+                session_for_eval.evaluation_status = EvaluationStatus.FAILED
+                await bg_db.commit()
                 raise
-            print(f"[SessionEnd] Background evaluation generated for session {session_id}")
+
         except Exception as e:
             print(f"[SessionEnd] Error in background evaluation for session {session_id}: {e}")
             import traceback

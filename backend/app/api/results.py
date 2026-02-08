@@ -208,7 +208,8 @@ async def get_candidates(
                 recommendationStatus=rec_status,
                 transcriptCount=counts["total"],
                 userMessageCount=counts["user"],
-                position=position
+                position=position,
+                evaluationStatus=session.evaluation_status.value if hasattr(session, 'evaluation_status') and session.evaluation_status else 'pending'
             ))
         
         return CandidateListResponse(results=results_list, total=len(results_list))
@@ -231,7 +232,7 @@ async def get_candidate_detail(
         raise HTTPException(status_code=400, detail="Invalid session_id format")
     
     try:
-        # Get session with all relationships
+        # Get session with all relationships (transcript loaded separately for performance)
         result = await db.execute(
             select(Session)
             .join(Interview, Session.interview_id == Interview.id)
@@ -243,7 +244,7 @@ async def get_candidate_detail(
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.key_phrases),
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.observations),
                 selectinload(Session.evaluation).selectinload(SessionEvaluation.criterion_results).selectinload(SessionEvaluationCriterionResult.criterion),
-                selectinload(Session.transcript_messages),
+                # selectinload(Session.transcript_messages),  # Removed for performance - use separate endpoint
                 selectinload(Session.interview).selectinload(Interview.config),
                 selectinload(Session.interview).selectinload(Interview.questions),
                 selectinload(Session.interview).selectinload(Interview.evaluation_criteria),
@@ -251,15 +252,18 @@ async def get_candidate_detail(
             )
         )
         session = result.scalar_one_or_none()
-        
+
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
-        
-        transcript_messages = sorted(
-            getattr(session, "transcript_messages", None) or [],
-            key=lambda x: getattr(x, "order_index", 0)
+
+        # Check if transcript exists (separate query for performance)
+        transcript_count_result = await db.execute(
+            select(func.count(SessionTranscript.id))
+            .where(SessionTranscript.session_id == session_uuid)
         )
-        if not transcript_messages:
+        transcript_count = transcript_count_result.scalar() or 0
+
+        if transcript_count == 0:
             raise HTTPException(status_code=404, detail="No transcript found for this session")
         
         evaluation = session.evaluation
@@ -316,19 +320,13 @@ async def get_candidate_detail(
         
         if not evaluation_details:
             raise HTTPException(status_code=500, detail="Could not load or generate evaluation")
-        
+
         def _dt_iso(dt):
             return dt.isoformat() if dt else None
 
-        transcript_data = [
-            {
-                "role": msg.role,
-                "message": msg.message_text,
-                "timestamp": _dt_iso(msg.timestamp),
-                "audioUrl": msg.audio_chunk_url,
-            }
-            for msg in transcript_messages
-        ]
+        # Transcript not loaded for performance - client should use separate endpoint
+        # /results/candidates/{session_id}/transcript for paginated loading
+        transcript_data = []  # Empty array - use separate endpoint for loading
 
         started_dt = session.started_at or session.created_at
         completed_dt = session.completed_at or started_dt
@@ -341,10 +339,12 @@ async def get_candidate_detail(
             "studentEmail": session.candidate_email,
             "startedAt": _dt_iso(started_dt),
             "completedAt": _dt_iso(completed_dt),
-            "transcript": transcript_data,
+            "transcript": transcript_data,  # Empty - use /candidates/{session_id}/transcript endpoint
+            "transcriptCount": transcript_count,  # Add count for UI
             "summary": evaluation_details.get("summary"),
             "score": evaluation_details.get("overall_score"),
             "qualityRating": quality_rating,
+            "evaluationStatus": session.evaluation_status.value if hasattr(session, 'evaluation_status') and session.evaluation_status else 'pending',
         }
 
         interview_info = None
@@ -394,6 +394,80 @@ async def get_candidate_detail(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching candidate detail: {str(e)}")
+
+
+@router.get("/candidates/{session_id}/transcript")
+async def get_candidate_transcript(
+    session_id: str,
+    offset: int = Query(0, ge=0, description="Number of messages to skip"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of messages to return"),
+    current_user: User = Depends(get_current_organizer),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get paginated transcript messages for a candidate session.
+
+    This endpoint is separate from candidate detail for performance optimization.
+    Use this to load transcript messages on demand or incrementally.
+    """
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id format")
+
+    try:
+        # Verify session exists and belongs to current organizer
+        session_check = await db.execute(
+            select(Session.id)
+            .join(Interview, Session.interview_id == Interview.id)
+            .where(Session.id == session_uuid)
+            .where(Interview.organizer_id == current_user.id)
+        )
+        if not session_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Get total count
+        count_result = await db.execute(
+            select(func.count(SessionTranscript.id))
+            .where(SessionTranscript.session_id == session_uuid)
+        )
+        total_count = count_result.scalar() or 0
+
+        # Get paginated messages
+        messages_result = await db.execute(
+            select(SessionTranscript)
+            .where(SessionTranscript.session_id == session_uuid)
+            .order_by(SessionTranscript.order_index)
+            .offset(offset)
+            .limit(limit)
+        )
+        messages = messages_result.scalars().all()
+
+        def _dt_iso(dt):
+            return dt.isoformat() if dt else None
+
+        transcript_data = [
+            {
+                "role": msg.role,
+                "message": msg.message_text,
+                "timestamp": _dt_iso(msg.timestamp),
+                "audioUrl": msg.audio_chunk_url,
+                "orderIndex": msg.order_index,
+            }
+            for msg in messages
+        ]
+
+        return JSONResponse(content={
+            "messages": transcript_data,
+            "total": total_count,
+            "offset": offset,
+            "limit": limit,
+            "hasMore": (offset + limit) < total_count
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching transcript: {str(e)}")
 
 
 @router.get("", response_model=List[CandidateListItemResponse])

@@ -275,8 +275,30 @@ async def generate_evaluation_from_transcript(
         session_params=session_params,
         evaluation_criteria=evaluation_criteria,
     )
-    
-    score = int(min(100, max(0, gpt_result.get("score", 50))))
+
+    # Calculate overall_score based on criterion passes (-1/0/1 scale)
+    criterion_results_raw = gpt_result.get("criterionResults") or []
+    if criterion_results_raw:
+        # Count passes: -1 (not met), 0 (partially met), 1 (met)
+        total_passes = sum(
+            int(cr.get("passes", 0))
+            for cr in criterion_results_raw
+            if isinstance(cr, dict)
+        )
+        num_criteria = len(criterion_results_raw)
+
+        if num_criteria > 0:
+            # Normalize from [-N, +N] range to [0, 100] scale
+            # Example: 3 criteria with passes [1, 0, -1] = 0 → (0 - (-3)) / (3 - (-3)) * 100 = 50%
+            min_possible = -num_criteria
+            max_possible = num_criteria
+            score = int(((total_passes - min_possible) / (max_possible - min_possible)) * 100)
+        else:
+            score = 50  # Default if no criteria
+    else:
+        # Fallback: use AI-generated score if criterionResults not available
+        score = int(min(100, max(0, gpt_result.get("score", 50))))
+
     summary = gpt_result.get("summary") or ""
     readiness = gpt_result.get("readiness") or ""
     recommendation = gpt_result.get("recommendation") or ""
@@ -340,7 +362,7 @@ async def generate_evaluation_from_transcript(
     
     # Сохранить оценки по критериям: новый формат criterionResults -> SessionEvaluationCriterionResult
     criterion_ids_valid = {str(getattr(c, "id", "")) for c in criteria_objs_sorted if getattr(c, "id", None)}
-    criterion_results_raw = gpt_result.get("criterionResults") or []
+    # criterion_results_raw уже определен выше для подсчета overall_score
     for cr in criterion_results_raw:
         if not isinstance(cr, dict):
             continue
