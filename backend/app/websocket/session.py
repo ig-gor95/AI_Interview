@@ -23,6 +23,7 @@ from app.services.session_service import (
     save_session_question_answer,
     get_session_question_answer_summaries
 )
+from app.services.evaluation_background import run_evaluation_background
 from app.schemas.session import (
     GPTContextRequest,
     GPTResponse,
@@ -1048,98 +1049,13 @@ async def _handle_end_session(
         # Don't fail the session end due to audio merge errors
 
     # Запустить генерацию оценки в фоне (не блокируем завершение сессии)
-    asyncio.create_task(_generate_evaluation_background(str(session.id)))
+    asyncio.create_task(run_evaluation_background(str(session.id)))
 
     await ws_manager.send_message(session_id, {
         "type": "ended",
         "message": "Интервью завершено",
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
-
-
-async def _generate_evaluation_background(session_id: str):
-    """Фоновая задача для генерации оценки через GPT (не блокирует завершение сессии)"""
-    from app.database import AsyncSessionLocal
-    from app.core import openai_service
-    from app.services.evaluation_service import generate_evaluation_from_transcript
-    from app.models.session import EvaluationStatus
-    from sqlalchemy.orm import selectinload
-    from sqlalchemy import select
-
-    async with AsyncSessionLocal() as bg_db:
-        try:
-            result = await bg_db.execute(
-                select(Session)
-                .where(Session.id == uuid.UUID(session_id))
-                .options(
-                    selectinload(Session.transcript_messages),
-                    selectinload(Session.interview).selectinload(Interview.config),
-                    selectinload(Session.interview).selectinload(Interview.questions),
-                    selectinload(Session.interview).selectinload(Interview.evaluation_criteria)
-                )
-            )
-            session_for_eval = result.scalar_one_or_none()
-            if not session_for_eval:
-                print(f"[SessionEnd] Session {session_id} not found, skipping evaluation")
-                return
-
-            # Set evaluation status to IN_PROGRESS
-            session_for_eval.evaluation_status = EvaluationStatus.IN_PROGRESS
-            await bg_db.commit()
-            
-            # Явно загрузить все relationships в память сразу после запроса, чтобы избежать lazy loading
-            # Это критически важно для предотвращения ошибки "greenlet_spawn has not been called"
-            try:
-                # Явно обратиться к relationships, чтобы они были загружены в память
-                # Это должно быть сделано в том же async контексте, где выполнен запрос
-                transcript_messages_list = session_for_eval.transcript_messages
-                if not transcript_messages_list:
-                    print(f"[SessionEnd] No transcript for session {session_id}, skipping evaluation")
-                    return
-                
-                # Преобразовать в список, чтобы загрузить все элементы в память
-                transcript_messages = list(transcript_messages_list)
-                
-                # Явно загрузить все данные интервью в память
-                interview = session_for_eval.interview
-                if interview:
-                    # Явно обратиться к relationships, чтобы они были загружены в память
-                    config = interview.config
-                    questions_list = list(interview.questions or [])
-                    criteria_list = list(interview.evaluation_criteria or [])
-                    # Убедиться, что все данные загружены, обратившись к их атрибутам
-                    for q in questions_list:
-                        _ = q.question_text
-                    for c in criteria_list:
-                        _ = c.criterion_name
-                
-                # Теперь все данные загружены в память, можно безопасно использовать объект
-                await generate_evaluation_from_transcript(
-                    session=session_for_eval,
-                    db=bg_db,
-                    ai_service=openai_service,
-                )
-
-                # Set evaluation status to COMPLETED on success
-                session_for_eval.evaluation_status = EvaluationStatus.COMPLETED
-                await bg_db.commit()
-                print(f"[SessionEnd] Background evaluation generated for session {session_id}")
-
-            except Exception as eval_err:
-                # Если произошла ошибка при загрузке данных, логируем и пропускаем
-                print(f"[SessionEnd] Error loading session data for evaluation: {eval_err}")
-                import traceback
-                traceback.print_exc()
-
-                # Set evaluation status to FAILED on error
-                session_for_eval.evaluation_status = EvaluationStatus.FAILED
-                await bg_db.commit()
-                raise
-
-        except Exception as e:
-            print(f"[SessionEnd] Error in background evaluation for session {session_id}: {e}")
-            import traceback
-            traceback.print_exc()
 
 
 async def _build_gpt_context(

@@ -9,7 +9,7 @@ import { languageAtom } from '@/lib/i18n';
 interface RequirementCheck {
   requirement: string;
   fact: string;
-  status: 'met' | 'not_met' | 'partial';
+  status: 'met' | 'not_met' | 'partial' | 'loading';
 }
 
 interface EvaluationCriterion {
@@ -58,6 +58,8 @@ interface Props {
   }>;
   simulation?: SimulationScenario;
   audioUrl?: string;
+  isLoadingTranscript?: boolean;
+  isEvaluating?: boolean;
   onBack?: () => void;
 }
 
@@ -72,6 +74,8 @@ export function CandidateEvaluationReport_v2({
   transcript,
   simulation,
   audioUrl,
+  isLoadingTranscript,
+  isEvaluating,
   onBack,
 }: Props) {
   const [language] = useAtom(languageAtom);
@@ -255,7 +259,18 @@ export function CandidateEvaluationReport_v2({
               </div>
 
               {/* NO SCORE BAR - This section is intentionally removed */}
-              
+
+              {/* AI Analyzing Banner */}
+              {isEvaluating && (
+                <div className="mx-6 mt-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">AI анализирует интервью...</p>
+                    <p className="text-xs text-blue-700">Оценка критериев будет готова через 10-30 секунд</p>
+                  </div>
+                </div>
+              )}
+
               <div className="p-6 space-y-6">
                 {/* Requirement Checks */}
                 {requirementChecks && requirementChecks.length > 0 && (
@@ -267,7 +282,9 @@ export function CandidateEvaluationReport_v2({
                     <ul className="space-y-2">
                       {requirementChecks.map((check, index) => (
                         <li key={index} className="flex items-start gap-2 text-sm">
-                          {check.status === 'met' ? (
+                          {check.status === 'loading' ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0 mt-0.5" />
+                          ) : check.status === 'met' ? (
                             <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
                           ) : check.status === 'partial' ? (
                             <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -276,11 +293,15 @@ export function CandidateEvaluationReport_v2({
                           )}
                           <div>
                             <span className="font-semibold text-gray-900">{check.requirement}:</span>{' '}
-                            <span className={
-                              check.status === 'met' ? 'text-gray-700' :
-                              check.status === 'partial' ? 'text-amber-800' :
-                              'text-red-800'
-                            }>{check.fact}</span>
+                            {check.status === 'loading' ? (
+                              <span className="inline-block h-4 w-48 bg-gray-200 animate-pulse rounded" />
+                            ) : (
+                              <span className={
+                                check.status === 'met' ? 'text-gray-700' :
+                                check.status === 'partial' ? 'text-amber-800' :
+                                'text-red-800'
+                              }>{check.fact}</span>
+                            )}
                           </div>
                         </li>
                       ))}

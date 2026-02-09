@@ -24,6 +24,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   const [error, setError] = useState<string | null>(null);
   const [evaluationStatus, setEvaluationStatus] = useState<'pending' | 'in_progress' | 'completed' | 'failed'>('pending');
   const fetchedRef = useRef<string | null>(null);
+  const autoRetryTriggeredRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (mockResult) {
@@ -46,8 +47,8 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
           setSimulation(res.simulation ?? null);
           setEvaluationStatus(res.result?.evaluationStatus || 'pending');
 
-          // Load transcript separately if evaluation is completed
-          if (res.result?.evaluationStatus === 'completed' && res.result?.transcriptCount > 0) {
+          // Load transcript separately when available
+          if (res.result?.transcriptCount > 0) {
             loadTranscript();
           }
         }
@@ -77,35 +78,45 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
 
     load();
 
-    // Poll for evaluation status if it's in_progress
-    let pollInterval: NodeJS.Timeout | null = null;
-    if (evaluationStatus === 'in_progress') {
-      pollInterval = setInterval(async () => {
-        try {
-          const res = await resultsAPI.getCandidateDetail(sessionId);
-          if (res.result?.evaluationStatus === 'completed') {
-            setEvaluationStatus('completed');
-            setResult(res.result);
-            setEvaluation(res.evaluation);
-            if (res.result?.transcriptCount > 0) {
-              loadTranscript();
-            }
-            if (pollInterval) clearInterval(pollInterval);
-          } else if (res.result?.evaluationStatus === 'failed') {
-            setEvaluationStatus('failed');
-            if (pollInterval) clearInterval(pollInterval);
-          }
-        } catch (err) {
-          console.error('Polling error:', err);
-        }
-      }, 3000); // Poll every 3 seconds
-    }
-
     return () => {
       cancelled = true;
-      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [sessionId, mockResult, evaluationStatus]);
+  }, [sessionId, mockResult]);
+
+  // Auto-retry on FAILED status (only once per mount)
+  useEffect(() => {
+    if (evaluationStatus === 'failed' && !autoRetryTriggeredRef.current) {
+      autoRetryTriggeredRef.current = true;
+      // Trigger a reload which will auto-start background evaluation via GET endpoint
+      fetchedRef.current = null;
+      setEvaluationStatus('in_progress');
+    }
+  }, [evaluationStatus]);
+
+  // Polling for in_progress evaluations
+  useEffect(() => {
+    if (evaluationStatus !== 'in_progress') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await resultsAPI.getCandidateDetail(sessionId);
+        if (res.result?.evaluationStatus === 'completed') {
+          setEvaluationStatus('completed');
+          setResult(res.result);
+          setEvaluation(res.evaluation);
+          // Transcript should already be loaded from initial fetch
+        } else if (res.result?.evaluationStatus === 'failed') {
+          setEvaluationStatus('failed');
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [evaluationStatus, sessionId]);
 
   if (isLoading) {
     return (
@@ -113,35 +124,6 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Загрузка результатов...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show evaluation generation status
-  if (evaluationStatus === 'in_progress') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-900 font-semibold mb-2">Генерация оценки...</p>
-          <p className="text-gray-600 text-sm">AI анализирует интервью и формирует детальную оценку. Это может занять 10-30 секунд.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (evaluationStatus === 'failed') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Ошибка генерации оценки</p>
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
-          >
-            Назад
-          </button>
         </div>
       </div>
     );
@@ -167,6 +149,9 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   const candidateName = result?.studentName || 'Кандидат';
   const role = interview?.position || session?.params?.position || session?.params?.topic || 'AI Интервью';
 
+  // Check if evaluation is in progress
+  const isEvaluating = !evaluation && (evaluationStatus === 'in_progress' || evaluationStatus === 'pending');
+
   // Calculate verdict
   const qualityRating = result?.qualityRating || (result?.score ? scoreToQualityRating(result.score) : 'suitable');
   const numericRating = {
@@ -177,6 +162,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   }[qualityRating] || 5.0;
 
   const verdict: 'recommended' | 'possible' | 'not_recommended' =
+    isEvaluating ? 'possible' :
     numericRating >= 7.5 ? 'recommended' :
     numericRating >= 5.0 ? 'possible' :
     'not_recommended';
@@ -186,19 +172,23 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
     ? evaluation.criterion_results.map((cr: any) => ({
         requirement: cr.criterionName || '',
         fact: cr.fact || cr.justification || 'Нет данных',
-        status: (cr.passes === 1 ? 'met' : cr.passes === 0 ? 'partial' : 'not_met') as 'met' | 'partial' | 'not_met'
+        status: (cr.passes === 1 ? 'met' : cr.passes === 0 ? 'partial' : 'not_met') as 'met' | 'partial' | 'not_met' | 'loading'
       }))
-    : interview?.evaluation_criteria?.map((criterion: any) => ({
+    : isEvaluating && interview?.evaluation_criteria?.length
+    ? interview.evaluation_criteria.map((criterion: any) => ({
         requirement: criterion.criterion_name,
-        fact: 'Оценка в процессе',
-        status: 'partial' as const
-      })) || [];
+        fact: '',
+        status: 'loading' as const
+      }))
+    : [];
 
   // Follow-up questions from improvements
   const followUpQuestions = evaluation?.improvements || [];
 
   // Recommendation text
-  const recommendation = evaluation?.summary || evaluation?.recommendation ||
+  const recommendation = isEvaluating
+    ? 'AI анализирует интервью...'
+    : evaluation?.summary || evaluation?.recommendation ||
     (verdict === 'recommended'
       ? 'Кандидат продемонстрировал сильные навыки и рекомендуется для дальнейшего рассмотрения.'
       : verdict === 'possible'
@@ -252,6 +242,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
       criteria={criteria}
       transcript={transcriptData}
       isLoadingTranscript={isLoadingTranscript}
+      isEvaluating={isEvaluating}
       simulation={simulationData}
       audioUrl={result?.audioUrl}
       onBack={onBack}

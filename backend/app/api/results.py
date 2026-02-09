@@ -6,6 +6,7 @@ from sqlalchemy import select, func, and_, or_, exists, case
 from sqlalchemy.orm import selectinload
 from typing import Optional, List
 import uuid
+import asyncio
 
 from app.database import get_db
 from app.models.user import User
@@ -16,10 +17,12 @@ from app.models.session import (
     SessionEvaluation,
     SessionTranscript,
     SessionEvaluationCriterionResult,
+    EvaluationStatus,
 )
 from app.models.simulation import SimulationScenario, SimulationDialog
 from app.core import openai_service
 from app.services.evaluation_service import generate_evaluation_from_transcript
+from app.services.evaluation_background import run_evaluation_background
 from app.services.audio_service import AudioService
 from app.utils.auth import get_current_organizer, get_current_user
 from app.schemas.result import (
@@ -268,23 +271,11 @@ async def get_candidate_detail(
         
         evaluation = session.evaluation
         evaluation_details = None
-        if not evaluation:
-            try:
-                evaluation_details = await generate_evaluation_from_transcript(
-                    session=session,
-                    db=db,
-                    ai_service=openai_service,
-                )
-                score = evaluation_details.get("overall_score")
-                quality_rating = score_to_quality_rating(score) if score is not None else None
-            except ValueError as ve:
-                raise HTTPException(status_code=400, detail=str(ve))
-            except Exception as gen_err:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Failed to generate evaluation: {str(gen_err)}"
-                )
-        else:
+        score = None
+        quality_rating = None
+
+        if evaluation:
+            # Evaluation exists and is COMPLETED - build full response
             criterion_results_list = []
             for cr in getattr(evaluation, "criterion_results", []) or []:
                 criterion = getattr(cr, "criterion", None)
@@ -317,9 +308,20 @@ async def get_candidate_detail(
             }
             score = evaluation.overall_score
             quality_rating = score_to_quality_rating(score)
-        
-        if not evaluation_details:
-            raise HTTPException(status_code=500, detail="Could not load or generate evaluation")
+        elif session.evaluation_status in (EvaluationStatus.FAILED, EvaluationStatus.PENDING, None):
+            # Auto-trigger background evaluation on FAILED/PENDING/None
+            session.evaluation_status = EvaluationStatus.IN_PROGRESS
+            await db.commit()
+            asyncio.create_task(run_evaluation_background(str(session.id)))
+            # Return partial response: evaluation=None, transcript + criteria available
+            evaluation_details = None
+            score = None
+            quality_rating = None
+        else:
+            # IN_PROGRESS - return partial response, frontend will poll
+            evaluation_details = None
+            score = None
+            quality_rating = None
 
         def _dt_iso(dt):
             return dt.isoformat() if dt else None
@@ -332,7 +334,7 @@ async def get_candidate_detail(
         completed_dt = session.completed_at or started_dt
 
         result_data = {
-            "id": str(evaluation_details.get("id", session.id)),
+            "id": str(evaluation_details.get("id", session.id)) if evaluation_details else str(session.id),
             "sessionId": str(session.id),
             "studentId": str(session.candidate_id) if session.candidate_id else None,
             "studentName": session.candidate_name,
@@ -341,8 +343,8 @@ async def get_candidate_detail(
             "completedAt": _dt_iso(completed_dt),
             "transcript": transcript_data,  # Empty - use /candidates/{session_id}/transcript endpoint
             "transcriptCount": transcript_count,  # Add count for UI
-            "summary": evaluation_details.get("summary"),
-            "score": evaluation_details.get("overall_score"),
+            "summary": evaluation_details.get("summary") if evaluation_details else None,
+            "score": score,
             "qualityRating": quality_rating,
             "evaluationStatus": session.evaluation_status.value if hasattr(session, 'evaluation_status') and session.evaluation_status else 'pending',
         }
@@ -380,7 +382,7 @@ async def get_candidate_detail(
                     }
                     for d in dialog_items
                 ],
-                "observations": evaluation_details.get("observations") or [],
+                "observations": evaluation_details.get("observations") if evaluation_details else [],
             }
 
         payload = {
