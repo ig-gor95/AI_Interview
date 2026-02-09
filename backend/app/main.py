@@ -3,7 +3,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.api import auth, interviews, results, public
-from app.websocket import session
+from app.websocket import session, stt as stt_ws
 
 app = FastAPI(
     title="AI HR Interview API",
@@ -43,6 +43,12 @@ async def websocket_session_endpoint(
         candidate_name=candidate_name,
         candidate_email=candidate_email
     )
+
+
+@app.websocket("/ws/stt/{session_id}")
+async def websocket_stt_endpoint(websocket: WebSocket, session_id: str):
+    """WebSocket for streaming speech-to-text. Send binary PCM (LINEAR16, 16kHz, mono)."""
+    await stt_ws.handle_stt_websocket(websocket=websocket, session_id=session_id)
 
 
 @app.get("/")
