@@ -826,19 +826,12 @@ export function InterviewSessionView() {
         silenceTimeoutRef.current = null;
       }
       if (userRequestedStopRef.current) {
-        setIsListening(false);
         userRequestedStopRef.current = false;
-        lastSpeechActivityRef.current = null;
-        return;
       }
-      // Пауза 2–3 сек: браузер завершил распознавание, но пользователь не нажимал «Стоп» — перезапускаем
-      console.log('[Frontend] Recognition ended (pause?), restarting in 300ms...');
+      // Ручной режим: при завершении распознавания (пауза, no-speech и т.д.) просто выключаем микрофон, без авто-перезапуска
       (window as any).currentSpeechRecognition = null;
-      setTimeout(() => {
-        if (userRequestedStopRef.current) return;
-        lastSpeechActivityRef.current = Date.now();
-        startSpeechRecognition(false);
-      }, 300);
+      setIsListening(false);
+      lastSpeechActivityRef.current = null;
     };
 
     recognition.onerror = (event: any) => {

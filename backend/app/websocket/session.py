@@ -91,13 +91,17 @@ class SessionWebSocketManager:
             await websocket.send_json(message)
             print(f"[WebSocket] Message sent successfully to session {session_id}")
         except Exception as e:
+            err_type = type(e).__name__
+            err_str = str(e).lower()
+            # Client often closes right after sending "end" — treat as expected, no traceback
+            if "ConnectionClosed" in err_type or "1005" in err_str or "closed" in err_str:
+                print(f"[WebSocket] Client already closed connection for session {session_id}, skipping send")
+                self.disconnect(session_id)
+                return
             print(f"[WebSocket] Error sending message to {session_id}: {e}")
             import traceback
             traceback.print_exc()
-            # Only disconnect if it's a connection error, not a send error
-            # This prevents closing connection on transient errors
-            if "closed" in str(e).lower() or "disconnect" in str(e).lower():
-                print(f"[WebSocket] Connection appears closed, disconnecting session {session_id}")
+            if "closed" in err_str or "disconnect" in err_str:
                 self.disconnect(session_id)
     
     async def receive_message(self, session_id: str) -> Dict[str, Any]:
@@ -1049,6 +1053,7 @@ async def _handle_end_session(
         # Don't fail the session end due to audio merge errors
 
     # Запустить генерацию оценки в фоне (не блокируем завершение сессии)
+    print(f"[SessionEnd] Starting background evaluation task for session {session.id}")
     asyncio.create_task(run_evaluation_background(str(session.id)))
 
     await ws_manager.send_message(session_id, {

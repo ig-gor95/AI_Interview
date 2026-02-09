@@ -276,8 +276,14 @@ async def generate_evaluation_from_transcript(
         evaluation_criteria=evaluation_criteria,
     )
 
-    # Calculate overall_score based on criterion passes (-1/0/1 scale)
     criterion_results_raw = gpt_result.get("criterionResults") or []
+    # Явно залогировать, если GPT вернул невалидный JSON и подставился fallback (все "Evaluation incomplete")
+    if criterion_results_raw and all(
+        (c.get("justification") or "").strip() == "Evaluation incomplete" for c in criterion_results_raw if isinstance(c, dict)
+    ):
+        print(f"[Evaluation] WARNING: GPT response was invalid (fallback used). All {len(criterion_results_raw)} criteria have 'Evaluation incomplete'. Check [GPT-Eval] logs above for parse error.")
+
+    # Calculate overall_score based on criterion passes (-1/0/1 scale)
     if criterion_results_raw:
         # Count passes: -1 (not met), 0 (partially met), 1 (met)
         total_passes = sum(

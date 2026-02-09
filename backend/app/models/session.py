@@ -36,7 +36,12 @@ class Session(Base):
     candidate_email = Column(String(255), nullable=True)  # email кандидата
     candidate_surname = Column(String(255), nullable=True)  # фамилия кандидата
     status = Column(Enum(SessionStatus), nullable=False, default=SessionStatus.PENDING, index=True)
-    evaluation_status = Column(Enum(EvaluationStatus), nullable=False, default=EvaluationStatus.PENDING, index=True)  # AI evaluation generation status
+    evaluation_status = Column(
+        Enum(EvaluationStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=EvaluationStatus.PENDING,
+        index=True,
+    )  # DB stores lowercase: pending, in_progress, completed, failed
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     audio_file_path = Column(String(1000), nullable=True)  # путь к аудио записи
