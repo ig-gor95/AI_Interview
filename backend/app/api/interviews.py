@@ -309,6 +309,149 @@ async def create_interview(
     )
 
 
+@router.put("/{interview_id}", response_model=SessionResponse)
+async def update_interview(
+    interview_id: str,
+    session_data: SessionCreate,
+    current_user: User = Depends(get_current_organizer),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update an existing interview template"""
+    try:
+        interview_uuid = uuid.UUID(interview_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid interview ID")
+
+    # Get existing interview
+    result = await db.execute(
+        select(Interview)
+        .options(
+            selectinload(Interview.questions),
+            selectinload(Interview.evaluation_criteria),
+            selectinload(Interview.config)
+        )
+        .where(Interview.id == interview_uuid)
+        .where(Interview.organizer_id == current_user.id)
+    )
+    interview = result.scalar_one_or_none()
+
+    if not interview:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interview not found")
+
+    # Update basic fields
+    interview.title = session_data.params.position
+    interview.position = session_data.params.position
+    interview.company = session_data.params.company
+
+    # Delete existing questions
+    await db.execute(
+        delete(InterviewQuestion).where(InterviewQuestion.interview_id == interview.id)
+    )
+
+    # Add new questions
+    if session_data.params.questions:
+        for idx, question in enumerate(session_data.params.questions):
+            parent_question = InterviewQuestion(
+                interview_id=interview.id,
+                question_text=question.text,
+                order_index=idx,
+                parent_question_id=None
+            )
+            db.add(parent_question)
+            await db.flush()
+
+            if question.clarifying_questions:
+                for clar_idx, clar_text in enumerate(question.clarifying_questions):
+                    child_question = InterviewQuestion(
+                        interview_id=interview.id,
+                        question_text=clar_text,
+                        order_index=clar_idx,
+                        parent_question_id=parent_question.id
+                    )
+                    db.add(child_question)
+
+    # Delete existing evaluation criteria
+    await db.execute(
+        delete(InterviewEvaluationCriterion).where(InterviewEvaluationCriterion.interview_id == interview.id)
+    )
+
+    # Add new evaluation criteria
+    criteria_index = 0
+    if session_data.params.must_have_requirements:
+        for requirement in session_data.params.must_have_requirements:
+            eval_criterion = InterviewEvaluationCriterion(
+                interview_id=interview.id,
+                criterion_name=requirement,
+                is_required=True,
+                order_index=criteria_index
+            )
+            db.add(eval_criterion)
+            criteria_index += 1
+
+    if session_data.params.nice_to_have_requirements:
+        for requirement in session_data.params.nice_to_have_requirements:
+            eval_criterion = InterviewEvaluationCriterion(
+                interview_id=interview.id,
+                criterion_name=requirement,
+                is_required=False,
+                order_index=criteria_index
+            )
+            db.add(eval_criterion)
+            criteria_index += 1
+
+    # Update config
+    if interview.config:
+        interview.config.customer_simulation = session_data.params.customer_simulation.model_dump() if session_data.params.customer_simulation else None
+        interview.config.allow_dynamic_questions = session_data.params.allow_dynamic_questions
+    else:
+        config = InterviewConfig(
+            interview_id=interview.id,
+            customer_simulation=session_data.params.customer_simulation.model_dump() if session_data.params.customer_simulation else None,
+            allow_dynamic_questions=session_data.params.allow_dynamic_questions
+        )
+        db.add(config)
+
+    # Update or create simulation scenario
+    await db.execute(
+        delete(SimulationScenario).where(SimulationScenario.interview_id == interview.id)
+    )
+
+    if session_data.params.customer_simulation and session_data.params.customer_simulation.enabled:
+        simulation_scenario = SimulationScenario(
+            interview_id=interview.id,
+            session_id=None,
+            scenario_type="customer_simulation",
+            scenario_description=session_data.params.customer_simulation.scenario or "",
+            client_role=session_data.params.customer_simulation.role or "",
+            client_behavior=None
+        )
+        db.add(simulation_scenario)
+
+    await db.commit()
+
+    # Reload interview with relationships
+    result = await db.execute(
+        select(Interview)
+        .options(
+            selectinload(Interview.questions),
+            selectinload(Interview.evaluation_criteria),
+            selectinload(Interview.config)
+        )
+        .where(Interview.id == interview.id)
+    )
+    updated_interview = result.scalar_one()
+
+    return SessionResponse(
+        id=str(updated_interview.id),
+        organizer_id=str(updated_interview.organizer_id),
+        organizer_name=current_user.name,
+        params=await _interview_to_params(updated_interview),
+        share_url=updated_interview.share_url,
+        created_at=updated_interview.created_at,
+        updated_at=updated_interview.updated_at
+    )
+
+
 @router.get("/{interview_id}", response_model=SessionResponse)
 async def get_interview(
     interview_id: str,
