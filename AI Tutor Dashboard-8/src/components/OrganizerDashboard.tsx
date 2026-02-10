@@ -489,7 +489,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -499,7 +499,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                      className="absolute -top-2 right-10 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute top-2 right-12 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
                       title={language === 'ru' ? 'Редактировать' : 'Edit'}
                     >
                       <Edit2 className="w-4 h-4" />
@@ -543,7 +543,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                         {(() => {
                           const count = results.filter(r => r.interviewId === session.id).length;
                           return count > 0 ? (
-                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
+                            <span className="absolute top-0 right-0 bg-red-400 text-white text-xs font-bold rounded-full min-w-5 h-5 px-1.5 flex items-center justify-center border-2 border-white">
                               {count}
                             </span>
                           ) : null;
