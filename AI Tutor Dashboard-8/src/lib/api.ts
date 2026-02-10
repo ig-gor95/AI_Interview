@@ -42,11 +42,17 @@ async function apiRequest<T>(
   if (!response.ok) {
     // Handle 401 Unauthorized - token expired or invalid
     if (response.status === 401) {
-      // Clear auth data and redirect to login
+      // Clear auth data
       removeAuthToken();
       localStorage.removeItem('currentUser');
-      // Reload page to trigger redirect to login
-      window.location.href = '/';
+
+      // Only redirect if not already on auth page (to avoid redirect loops)
+      // This handles cases where token expires during app usage
+      if (!endpoint.includes('/auth/')) {
+        // Dispatch custom event to notify App component
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+
       throw new Error('Session expired. Please log in again.');
     }
 

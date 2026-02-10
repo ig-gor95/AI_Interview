@@ -22,6 +22,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Add loading state for auth check
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -46,9 +47,28 @@ function AppContent() {
           console.log('Token validation failed, logging out', error);
           authLogout();
           setUser(null);
+        })
+        .finally(() => {
+          setIsCheckingAuth(false); // Auth check complete
         });
+    } else {
+      setIsCheckingAuth(false); // No user in localStorage, auth check complete
     }
   }, []);
+
+  // Handle unauthorized events (401 errors during app usage)
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      console.log('Unauthorized event received, logging out');
+      setUser(null);
+      navigate('/');
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, [navigate]);
 
   const loadInterviews = async () => {
     try {
@@ -148,6 +168,18 @@ function AppContent() {
 
   // Protected Route Component
   const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    if (isCheckingAuth) {
+      // Show loading spinner while checking authentication
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      );
+    }
+
     if (!user) {
       return <Navigate to="/" replace />;
     }
