@@ -448,12 +448,12 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                           onFocus={() => setShowCompanyDropdown(true)}
                           onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 200)}
                           placeholder={language === 'ru' ? 'Компания...' : 'Company...'}
-                          className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${companyFilter ? 'pr-10' : ''}`}
+                          className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         {companyFilter && (
                           <button
                             onClick={() => setCompanyFilter('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
                           >
                             ✕
                           </button>
@@ -492,12 +492,12 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                           onFocus={() => setShowPositionDropdown(true)}
                           onBlur={() => setTimeout(() => setShowPositionDropdown(false), 200)}
                           placeholder={language === 'ru' ? 'Вакансия...' : 'Position...'}
-                          className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${positionFilter ? 'pr-10' : ''}`}
+                          className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         {positionFilter && (
                           <button
                             onClick={() => setPositionFilter('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
                           >
                             ✕
                           </button>
