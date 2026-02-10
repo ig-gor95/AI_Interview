@@ -68,6 +68,7 @@ class CandidateListItemResponse(BaseModel):
     """Candidate list item - simplified version for list view (no transcript)"""
     id: str
     session_id: str = Field(alias="sessionId")
+    interview_id: Optional[str] = Field(None, alias="interviewId")
     student_id: Optional[str] = Field(None, alias="studentId")
     student_name: Optional[str] = Field(None, alias="studentName")
     student_surname: Optional[str] = Field(None, alias="studentSurname")

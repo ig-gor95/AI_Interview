@@ -492,17 +492,17 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                       className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
 
                     {/* Edit button — to the left of delete button */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                      className="absolute -top-2 right-8 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute -top-2 right-10 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
                       title={language === 'ru' ? 'Редактировать' : 'Edit'}
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <Edit2 className="w-4 h-4" />
                     </button>
 
                     {/* Title + company + badges */}
@@ -541,7 +541,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                         <Users className="w-4 h-4" style={{ color: '#ffffff' }} />
                         <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
                         {(() => {
-                          const count = results.filter(r => r.sessionId === session.id).length;
+                          const count = results.filter(r => r.interviewId === session.id).length;
                           return count > 0 ? (
                             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
                               {count}

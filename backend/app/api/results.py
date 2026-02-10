@@ -208,6 +208,7 @@ async def get_candidates(
             results_list.append(CandidateListItemResponse(
                 id=str(evaluation.id) if evaluation else str(session.id),
                 sessionId=str(session.id),
+                interviewId=str(session.interview_id) if session.interview_id else None,
                 studentId=str(session.candidate_id) if session.candidate_id else None,
                 studentName=session.candidate_name,
                 studentSurname=getattr(session, 'candidate_surname', None),
