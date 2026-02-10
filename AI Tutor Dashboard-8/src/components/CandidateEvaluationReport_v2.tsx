@@ -309,6 +309,15 @@ export function CandidateEvaluationReport_v2({
                   </div>
                 )}
 
+                {/* Recommendation */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Lightbulb className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-base font-bold text-gray-900">{t.recommendationTitle}</h3>
+                  </div>
+                  <p className="text-sm text-gray-700 leading-relaxed">{recommendation}</p>
+                </div>
+
                 {/* Follow-up Questions */}
                 {followUpQuestions && followUpQuestions.length > 0 && (
                   <div>
@@ -326,15 +335,6 @@ export function CandidateEvaluationReport_v2({
                     </ul>
                   </div>
                 )}
-
-                {/* Recommendation */}
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Lightbulb className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-base font-bold text-gray-900">{t.recommendationTitle}</h3>
-                  </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">{recommendation}</p>
-                </div>
               </div>
             </div>
 
@@ -439,36 +439,7 @@ export function CandidateEvaluationReport_v2({
                 
                 {showSimulation && (
                   <div className="px-6 pb-6 pt-2 border-t border-gray-200">
-                    <div className="space-y-3 mb-4">
-                      {simulation.dialog.map((msg, index) => (
-                        <div key={index} className="flex gap-3">
-                          <div className="flex-shrink-0">
-                            {msg.role === 'ai' ? (
-                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                                <Bot className="w-4 h-4 text-purple-600" />
-                              </div>
-                            ) : (
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                <User className="w-4 h-4 text-blue-600" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className={`rounded-lg px-4 py-2.5 ${
-                              msg.role === 'ai' 
-                                ? msg.tone === 'aggressive' 
-                                  ? 'bg-red-50 border border-red-200' 
-                                  : 'bg-purple-50 border border-purple-200'
-                                : 'bg-blue-50 border border-blue-200'
-                            }`}>
-                              <p className="text-sm text-gray-800">{msg.message}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="mb-4">
                       <h4 className="font-semibold text-sm text-gray-900 mb-3">
                         {language === 'ru' ? 'Итоги' : 'Summary'}
                       </h4>
@@ -490,6 +461,35 @@ export function CandidateEvaluationReport_v2({
                           </li>
                         ))}
                       </ul>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                      {simulation.dialog.map((msg, index) => (
+                        <div key={index} className="flex gap-3">
+                          <div className="flex-shrink-0">
+                            {msg.role === 'ai' ? (
+                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                <Bot className="w-4 h-4 text-purple-600" />
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <User className="w-4 h-4 text-blue-600" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className={`rounded-lg px-4 py-2.5 ${
+                              msg.role === 'ai'
+                                ? msg.tone === 'aggressive'
+                                  ? 'bg-red-50 border border-red-200'
+                                  : 'bg-purple-50 border border-purple-200'
+                                : 'bg-blue-50 border border-blue-200'
+                            }`}>
+                              <p className="text-sm text-gray-800">{msg.message}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

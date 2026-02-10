@@ -316,6 +316,15 @@ Focus Areas: {focus_areas_str}
 Expected Knowledge: {expected_knowledge_str}
 Evaluation Criteria: {criteria_list_str}
 
+IMPORTANT NOTE ABOUT SPEECH RECOGNITION:
+- Candidate responses were obtained through voice-to-text transcription
+- May contain transcription errors, especially in:
+  * English technical terms (e.g., "Фигма" instead of "Figma", "джира" instead of "Jira")
+  * Company names, tools, technologies
+  * Abbreviations and acronyms
+- When analyzing, try to understand the candidate's intent and infer the correct spelling of technical terms
+- Focus on the content and meaning rather than exact wording
+
 For each criterion: (1) Determine if the candidate meets the criterion using a 3-level scale:
   1 = подходит (clearly meets the criterion)
   0 = возможно подойдет (partially meets or unclear)
@@ -769,6 +778,15 @@ Transcript:
         prompt = f"""Ты AI-интервьюер, проводящий скрининг-собеседование в компанию {interview.company or "компанию"} на позицию {interview.position}.
 
 ВАЖНО: Это скрининг-собеседование (первичный отбор), а не полное интервью. Цель - быстро оценить базовые компетенции, мотивацию и коммуникативные навыки кандидата.
+
+ОСОБЕННОСТИ РАСПОЗНАВАНИЯ РЕЧИ:
+- Ответы кандидата получены через голосовое распознавание речи (Speech-to-Text)
+- Могут содержаться ошибки транскрипции, особенно в:
+  * Английских технических терминах (например, "Фигма" вместо "Figma", "джира" вместо "Jira")
+  * Специальных названиях компаний, инструментов, технологий
+  * Сокращениях и аббревиатурах
+- При анализе ответов старайся понять намерение кандидата и догадаться о правильном написании технических терминов
+- Если ответ кажется странным или непонятным, возможно это ошибка транскрипции - попробуй переспросить или уточнить
 
 ПРАВИЛА ПОВЕДЕНИЯ:
 

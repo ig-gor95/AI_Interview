@@ -64,6 +64,8 @@ export function InterviewSessionView() {
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [typingMessageTimestamp, setTypingMessageTimestamp] = useState<string | null>(null);
   const [visibleCharCount, setVisibleCharCount] = useState(0);
+  const [sttMethod, setSttMethod] = useState<'backend' | 'browser' | null>(null);
+  const [showSttWarning, setShowSttWarning] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -738,6 +740,7 @@ export function InterviewSessionView() {
         console.log('[Frontend] Recognition already stopped:', e);
       }
       setIsListening(false);
+      setSttMethod(null);
       lastSpeechActivityRef.current = null;
       return;
     }
@@ -760,19 +763,26 @@ export function InterviewSessionView() {
       const probe = new WebSocket(wsUrl);
       const fallbackTimer = setTimeout(() => {
         if (probe.readyState !== WebSocket.OPEN) {
+          console.warn('[Frontend] Backend STT connection timeout, falling back to Web Speech API (may have issues with English terms)');
           probe.close();
+          setSttMethod('browser');
+          setShowSttWarning(true);
           startSpeechRecognition(!isResume);
         }
-      }, 2500);
+      }, 5000); // Increased from 2500ms to 5000ms for more reliable backend STT connection
       probe.onopen = () => {
         clearTimeout(fallbackTimer);
         probe.close();
         sttWsRef.current = null;
+        setSttMethod('backend');
+        setShowSttWarning(false);
         startBackendStt(isResume);
       };
       probe.onerror = () => {
         clearTimeout(fallbackTimer);
         probe.close();
+        setSttMethod('browser');
+        setShowSttWarning(true);
         startSpeechRecognition(!isResume);
       };
     } else {
@@ -827,6 +837,7 @@ export function InterviewSessionView() {
     }
     useBackendSttRef.current = false;
     setIsListening(false);
+    setSttMethod(null);
     lastSpeechActivityRef.current = null;
   }
 
@@ -957,11 +968,16 @@ export function InterviewSessionView() {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    // Language setting for speech recognition
+    // Note: Web Speech API doesn't support multiple languages simultaneously like Google Cloud Speech
+    // Using ru-RU as primary language. English words may be transcribed incorrectly (e.g., "Фигма" instead of "Figma")
+    // The backend AI is configured to understand and correct common transcription errors in technical terms
     recognition.lang = 'ru-RU';
 
     recognition.onstart = () => {
       console.log('[Frontend] Speech recognition started');
       setIsListening(true);
+      setSttMethod('browser');
       if (isInitialStart) {
         setInterimTranscript('');
       } else {
@@ -1049,6 +1065,7 @@ export function InterviewSessionView() {
         // User clicked stop or silence timeout — stay stopped, keep text visible
         userRequestedStopRef.current = false;
         setIsListening(false);
+        setSttMethod(null);
         lastSpeechActivityRef.current = null;
       } else {
         // Browser auto-ended recognition (pause, no-speech, etc.) — restart to keep mic active
@@ -1058,6 +1075,7 @@ export function InterviewSessionView() {
             startSpeechRecognition(false); // false = keep existing text (resume)
           } else {
             setIsListening(false);
+            setSttMethod(null);
             lastSpeechActivityRef.current = null;
           }
         }, 100);
@@ -1086,6 +1104,7 @@ export function InterviewSessionView() {
         setError(`Ошибка распознавания речи: ${event.error}`);
       }
       setIsListening(false);
+      setSttMethod(null);
       lastSpeechActivityRef.current = null;
     };
 
@@ -1339,6 +1358,25 @@ export function InterviewSessionView() {
                 </div>
               </div>
             )}
+
+            {/* STT Warning */}
+            {showSttWarning && sttMethod === 'browser' && (
+              <div className="absolute top-4 right-4 px-4 py-2.5 bg-amber-600/90 backdrop-blur-md rounded-xl z-10 max-w-xs">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs text-white font-medium">Внимание</p>
+                    <p className="text-xs text-white/90 mt-0.5">Английские термины могут распознаваться с ошибками</p>
+                  </div>
+                  <button
+                    onClick={() => setShowSttWarning(false)}
+                    className="text-white/70 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Candidate Video */}
@@ -1459,16 +1497,27 @@ export function InterviewSessionView() {
           )}
 
           <div className="flex items-center gap-1.5 sm:gap-3">
-            <button
-              onClick={() => setIsMuted(!isMuted)}
-              className={`px-2 sm:px-4 py-2 sm:py-3 rounded-xl transition-all ${
-                isMuted 
-                  ? 'bg-red-600 hover:bg-red-700 text-white' 
-                  : 'bg-gray-700/50 hover:bg-gray-700 text-white'
-              }`}
-            >
-              {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
-            </button>
+            <div className="flex flex-col items-center gap-1">
+              <button
+                onClick={() => setIsMuted(!isMuted)}
+                className={`px-2 sm:px-4 py-2 sm:py-3 rounded-xl transition-all ${
+                  isMuted
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-gray-700/50 hover:bg-gray-700 text-white'
+                }`}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
+              {sttMethod && isListening && (
+                <span className={`text-[9px] sm:text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                  sttMethod === 'backend'
+                    ? 'bg-green-600/20 text-green-400'
+                    : 'bg-amber-600/20 text-amber-400'
+                }`}>
+                  {sttMethod === 'backend' ? 'AI STT' : 'Browser'}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
