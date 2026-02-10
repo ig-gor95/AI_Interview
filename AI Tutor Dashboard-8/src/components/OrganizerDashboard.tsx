@@ -485,24 +485,24 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative overflow-visible">
-                    {/* Edit button — top-left corner */}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                      className="absolute -top-2 -left-2 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
-                      title={language === 'ru' ? 'Редактировать' : 'Edit'}
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Delete button — to the right of edit button */}
+                    {/* Delete button — top-right corner */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute -top-2 left-8 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Edit button — to the left of delete button */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
+                      className="absolute -top-2 right-8 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      title={language === 'ru' ? 'Редактировать' : 'Edit'}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Title + company + badges */}
