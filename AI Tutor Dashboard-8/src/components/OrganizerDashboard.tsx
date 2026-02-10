@@ -490,18 +490,18 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                        className="p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-md transition-colors shadow-md"
+                        className="p-2 bg-blue-500 text-white hover:bg-blue-600 rounded-md transition-colors shadow-md"
                         title={language === 'ru' ? 'Редактировать' : 'Edit'}
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                        className="p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors shadow-md"
+                        className="p-2 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors shadow-md"
                         title={language === 'ru' ? 'Удалить' : 'Delete'}
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
 
