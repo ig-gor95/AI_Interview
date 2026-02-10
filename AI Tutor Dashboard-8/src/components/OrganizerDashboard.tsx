@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, HelpCircle, QrCode, Trash2 } from 'lucide-react';
+import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, HelpCircle, QrCode, Trash2, Edit2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useAtom } from 'jotai';
 import { languageAtom, useTranslation } from '@/lib/i18n';
@@ -25,6 +25,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   const t = useTranslation(language);
   const [activeTab, setActiveTab] = useState<'manage' | 'students'>('manage');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedTranscripts, setExpandedTranscripts] = useState<Set<string>>(new Set());
   const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
@@ -41,9 +42,11 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [candidateStatuses, setCandidateStatuses] = useState<Record<string, string>>({});
   const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
+  const [companyFilter, setCompanyFilter] = useState<string>('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
 
   // Filter sessions and validate UUID format
-  const userSessions = sessions.filter(s => {
+  const allUserSessions = sessions.filter(s => {
     if (s.organizerId !== user.id) return false;
     // Validate UUID format to prevent errors with old mockData IDs
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +55,26 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
       return false;
     }
     return true;
+  });
+
+  // Get unique companies for filter
+  const uniqueCompanies = Array.from(
+    new Set(
+      allUserSessions
+        .map(s => s.params.company)
+        .filter((c): c is string => !!c && c.trim() !== '')
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  // Filter companies by search input
+  const filteredCompanies = uniqueCompanies.filter(company =>
+    company.toLowerCase().includes(companyFilter.toLowerCase())
+  );
+
+  // Apply company filter to sessions
+  const userSessions = allUserSessions.filter(s => {
+    if (!companyFilter) return true;
+    return s.params.company?.toLowerCase().includes(companyFilter.toLowerCase());
   });
   const [results, setResults] = useState<any[]>([]);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -68,10 +91,10 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     loadStatistics();
   }, [user.id]);
   
-  // Reload when switching to candidates tab or when selectedInterviewId changes
+  // Reload when switching tabs or when selectedInterviewId changes
   useEffect(() => {
+    loadResults();
     if (activeTab === 'students') {
-      loadResults();
       loadStatistics();
     }
   }, [activeTab, selectedInterviewId]);
@@ -79,7 +102,8 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   const loadResults = async () => {
     try {
       setIsLoadingResults(true);
-      const params = selectedInterviewId ? { interview_id: selectedInterviewId } : undefined;
+      // On 'manage' tab, always load all results; on 'students' tab, filter by selectedInterviewId
+      const params = (activeTab === 'students' && selectedInterviewId) ? { interview_id: selectedInterviewId } : undefined;
       const candidatesResponse = await resultsAPI.getCandidates(params);
       const candidates = candidatesResponse.results || [];
       setResults(candidates);
@@ -131,7 +155,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     try {
       // Отправляем данные на бэкенд
       const newInterview = await interviewsAPI.createInterview({ params });
-      
+
       // Обновляем локальное хранилище для совместимости (если нужно)
       saveSession({
         id: newInterview.id,
@@ -141,7 +165,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
         createdAt: newInterview.createdAt,
         shareUrl: newInterview.shareUrl
       });
-      
+
       setShowCreateForm(false);
       onRefresh(); // Обновляем список интервью
     } catch (error) {
@@ -150,7 +174,16 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     }
   };
 
-
+  const handleUpdateSession = async (interviewId: string, params: SessionParams) => {
+    try {
+      await interviewsAPI.updateInterview(interviewId, { params });
+      setEditingSession(null);
+      onRefresh(); // Обновляем список интервью
+    } catch (error) {
+      console.error('Ошибка при обновлении интервью:', error);
+      alert(error instanceof Error ? error.message : 'Ошибка при обновлении интервью. Попробуйте еще раз.');
+    }
+  };
 
   const copyToClipboard = (sessionId: string, url: string) => {
     const fullUrl = `${window.location.origin}${url}`;
@@ -305,9 +338,21 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
 
         {/* Create Form Modal */}
         {showCreateForm && (
-          <InterviewForm 
+          <InterviewForm
             onClose={() => setShowCreateForm(false)}
             onCreate={handleCreateSession}
+          />
+        )}
+
+        {/* Edit Form Modal */}
+        {editingSession && (
+          <InterviewForm
+            onClose={() => setEditingSession(null)}
+            onCreate={handleCreateSession}
+            editMode={true}
+            interviewId={editingSession.id}
+            initialData={editingSession.params}
+            onUpdate={handleUpdateSession}
           />
         )}
 
@@ -355,7 +400,57 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
         {/* Content based on active tab */}
         {activeTab === 'manage' && (
           <div className="space-y-4">
-            {userSessions.length === 0 ? (
+            {/* Company filter */}
+            {allUserSessions.length > 0 && uniqueCompanies.length > 0 && (
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {language === 'ru' ? 'Фильтр по компании' : 'Filter by company'}
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    onFocus={() => setShowCompanyDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 200)}
+                    placeholder={language === 'ru' ? 'Начните вводить название компании...' : 'Start typing company name...'}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  {companyFilter && (
+                    <button
+                      onClick={() => setCompanyFilter('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {showCompanyDropdown && filteredCompanies.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredCompanies.map((company) => (
+                        <button
+                          key={company}
+                          onClick={() => {
+                            setCompanyFilter(company);
+                            setShowCompanyDropdown(false);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors"
+                        >
+                          {company}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  {language === 'ru'
+                    ? `Показано ${userSessions.length} из ${allUserSessions.length} интервью`
+                    : `Showing ${userSessions.length} of ${allUserSessions.length} interviews`
+                  }
+                </p>
+              </div>
+            )}
+
+            {userSessions.length === 0 && allUserSessions.length === 0 ? (
               <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                 <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Target className="w-8 h-8 text-purple-600" />
@@ -372,15 +467,39 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                   <span>{t.organizerDashboard.createButton}</span>
                 </button>
               </div>
+            ) : userSessions.length === 0 && allUserSessions.length > 0 ? (
+              <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
+                <p className="text-gray-600 mb-4">
+                  {language === 'ru'
+                    ? 'Не найдено интервью для выбранной компании'
+                    : 'No interviews found for selected company'}
+                </p>
+                <button
+                  onClick={() => setCompanyFilter('')}
+                  className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {language === 'ru' ? 'Сбросить фильтр' : 'Reset filter'}
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
-                    {/* Delete button — overlapping top-left corner of the card */}
+                    {/* Edit button — overlapping top-right corner */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
+                      className="absolute -top-2 -right-12 p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-10"
+                      title={language === 'ru' ? 'Редактировать' : 'Edit'}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Delete button — overlapping top-right corner of the card */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute -top-2 -left-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-10"
+                      className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-10"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />

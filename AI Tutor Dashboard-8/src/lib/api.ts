@@ -105,6 +105,13 @@ export const interviewsAPI = {
     });
   },
 
+  async updateInterview(interviewId: string, interviewData: { params: any }) {
+    return apiRequest<any>(`/interviews/${interviewId}`, {
+      method: 'PUT',
+      body: JSON.stringify(interviewData),
+    });
+  },
+
   async createLink(interviewId: string) {
     return apiRequest<{
       id: string;

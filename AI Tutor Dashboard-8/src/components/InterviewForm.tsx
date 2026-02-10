@@ -15,13 +15,17 @@ interface QuestionWithClarifications {
 interface Props {
   onClose: () => void;
   onCreate: (params: SessionParams) => void;
+  editMode?: boolean;
+  interviewId?: string;
+  initialData?: SessionParams;
+  onUpdate?: (id: string, params: SessionParams) => void;
 }
 
-export function InterviewForm({ onClose, onCreate }: Props) {
+export function InterviewForm({ onClose, onCreate, editMode = false, interviewId, initialData, onUpdate }: Props) {
   const [language] = useAtom(languageAtom);
   const t = useTranslation(language);
-  
-  const [formData, setFormData] = useState<SessionParams>({
+
+  const defaultFormData: SessionParams = {
     topic: '',
     difficulty: 'intermediate',
     duration: 30,
@@ -47,23 +51,56 @@ export function InterviewForm({ onClose, onCreate }: Props) {
       enabled: false,
       example: ''
     }
-  });
+  };
+
+  // Transform questions from API format to form format
+  const transformInitialData = (data: SessionParams | undefined): SessionParams => {
+    if (!data) return defaultFormData;
+
+    return {
+      ...data,
+      questions: data.questions?.map((q: any) => typeof q === 'string' ? q : q.text) || []
+    };
+  };
+
+  const [formData, setFormData] = useState<SessionParams>(
+    editMode && initialData ? transformInitialData(initialData) : defaultFormData
+  );
 
   const [questionInput, setQuestionInput] = useState('');
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
   const [clarifyingInputs, setClarifyingInputs] = useState<Record<number, string>>({});
-  const [questionClarifications, setQuestionClarifications] = useState<Record<number, string[]>>({});
-  
+
+  // Initialize questionClarifications from initialData if in edit mode
+  const initQuestionClarifications = () => {
+    if (editMode && initialData?.questions) {
+      const clarifications: Record<number, string[]> = {};
+      initialData.questions.forEach((q: any, index: number) => {
+        if (typeof q === 'object' && q.clarifyingQuestions) {
+          clarifications[index] = q.clarifyingQuestions;
+        }
+      });
+      return clarifications;
+    }
+    return {};
+  };
+
+  const [questionClarifications, setQuestionClarifications] = useState<Record<number, string[]>>(initQuestionClarifications());
+
   // Новые состояния для AI генерации
   const [jobDescription, setJobDescription] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   // Состояния для критериев оценки
   const [showCriteriaSection, setShowCriteriaSection] = useState(false);
   const [mustHaveInput, setMustHaveInput] = useState('');
   const [niceToHaveInput, setNiceToHaveInput] = useState('');
-  const [mustHaveRequirements, setMustHaveRequirements] = useState<string[]>(formData.mustHaveRequirements || []);
-  const [niceToHaveRequirements, setNiceToHaveRequirements] = useState<string[]>(formData.niceToHaveRequirements || []);
+  const [mustHaveRequirements, setMustHaveRequirements] = useState<string[]>(
+    (editMode && initialData?.mustHaveRequirements) ? initialData.mustHaveRequirements : (formData.mustHaveRequirements || [])
+  );
+  const [niceToHaveRequirements, setNiceToHaveRequirements] = useState<string[]>(
+    (editMode && initialData?.niceToHaveRequirements) ? initialData.niceToHaveRequirements : (formData.niceToHaveRequirements || [])
+  );
 
   const addQuestion = () => {
     if (questionInput.trim()) {
@@ -132,7 +169,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
       alert(t.interviewForm.alertQuestions);
       return;
     }
-    
+
     // Преобразуем questions в формат API: { text, clarifyingQuestions? }[]
     const questions = (formData.questions || []).map((text, index) => {
       const clarifications = questionClarifications[index]?.filter(Boolean);
@@ -142,7 +179,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
       };
     });
 
-    onCreate({
+    const params = {
       ...formData,
       questions,
       mustHaveRequirements,
@@ -151,7 +188,13 @@ export function InterviewForm({ onClose, onCreate }: Props) {
         enabled: Object.values(questionClarifications).some(arr => arr?.length > 0),
         example: Object.values(questionClarifications).flat().find(Boolean) || ''
       }
-    });
+    };
+
+    if (editMode && interviewId && onUpdate) {
+      onUpdate(interviewId, params);
+    } else {
+      onCreate(params);
+    }
   };
 
   const generateQuestions = async () => {
@@ -918,7 +961,7 @@ export function InterviewForm({ onClose, onCreate }: Props) {
               disabled={!formData.position}
               className="px-10 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-sm shadow-lg"
             >
-              {t.interviewForm.create}
+              {editMode ? (language === 'ru' ? 'Обновить' : 'Update') : t.interviewForm.create}
             </button>
           </div>
         </div>
