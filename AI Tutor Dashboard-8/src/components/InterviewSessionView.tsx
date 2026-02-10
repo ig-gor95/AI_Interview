@@ -629,10 +629,35 @@ export function InterviewSessionView() {
   };
 
 
-  // Send current accumulated text (from mic or typed) without stopping mic
+  // Send current accumulated text and stop mic (it's AI's turn after sending)
   const sendCurrentTranscript = () => {
     const text = (interimTranscript || finalTranscriptRef.current || '').trim();
     if (!text) return;
+
+    // Stop mic if still recording
+    if (isListening) {
+      userRequestedStopRef.current = true;
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+      if (useBackendSttRef.current) {
+        stopBackendStt(false);
+      } else {
+        const recognition = (window as any).currentSpeechRecognition;
+        if (recognition) {
+          try { recognition.stop(); } catch (_) {}
+        }
+        (window as any).currentSpeechRecognition = null;
+        setIsListening(false);
+        lastSpeechActivityRef.current = null;
+      }
+    }
+
     finalTranscriptRef.current = '';
     setInterimTranscript('');
     sendTextMessage(text);
@@ -694,17 +719,16 @@ export function InterviewSessionView() {
         speechPauseTimeoutRef.current = null;
       }
       if (useBackendSttRef.current) {
-        stopBackendStt();
+        stopBackendStt(false); // Only stop recording, don't send — user sends via button
         return;
       }
+      // Keep text visible for user to send via button
       const finalText = finalTranscriptRef.current.trim();
       if (finalText) {
-        console.log('[Frontend] Sending accumulated text (user stopped):', finalText);
-        sendTextMessage(finalText);
-        finalTranscriptRef.current = '';
-        setInterimTranscript('');
+        console.log('[Frontend] Mic stopped, text preserved for manual send:', finalText);
+        setInterimTranscript(finalText);
       } else {
-        console.log('[Frontend] No text to send, stopping recognition');
+        console.log('[Frontend] No text recorded');
       }
       try {
         recognition.stop();
@@ -879,7 +903,7 @@ export function InterviewSessionView() {
         if (!data) return;
         if (data.type === 'error') {
           console.warn('[Frontend] STT error, fallback to Web Speech API:', data.message);
-          stopBackendStt();
+          stopBackendStt(false); // Don't send, preserve text
           const hadPending = finalTranscriptRef.current.trim().length > 0;
           startSpeechRecognition(!hadPending);
           return;
@@ -908,7 +932,7 @@ export function InterviewSessionView() {
     ws.onerror = () => {
       if (!useBackendSttRef.current) return;
       console.log('[Frontend] STT WebSocket error, fallback to Web Speech API');
-      stopBackendStt();
+      stopBackendStt(false); // Don't send, preserve text
       startSpeechRecognition(false);
     };
 
@@ -1017,13 +1041,25 @@ export function InterviewSessionView() {
         clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = null;
       }
-      if (userRequestedStopRef.current) {
-        userRequestedStopRef.current = false;
-      }
-      // Ручной режим: при завершении распознавания (пауза, no-speech и т.д.) просто выключаем микрофон, без авто-перезапуска
       (window as any).currentSpeechRecognition = null;
-      setIsListening(false);
-      lastSpeechActivityRef.current = null;
+
+      if (userRequestedStopRef.current) {
+        // User clicked stop or silence timeout — stay stopped, keep text visible
+        userRequestedStopRef.current = false;
+        setIsListening(false);
+        lastSpeechActivityRef.current = null;
+      } else {
+        // Browser auto-ended recognition (pause, no-speech, etc.) — restart to keep mic active
+        console.log('[Frontend] Browser auto-ended recognition, restarting...');
+        setTimeout(() => {
+          if (!userRequestedStopRef.current && !isProcessing) {
+            startSpeechRecognition(false); // false = keep existing text (resume)
+          } else {
+            setIsListening(false);
+            lastSpeechActivityRef.current = null;
+          }
+        }, 100);
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -1039,13 +1075,10 @@ export function InterviewSessionView() {
         // Часто при паузе браузер шлёт no-speech — не считаем ошибкой, перезапуск сделает onend
         return;
       }
-      // Отправлять только если пользователь сам нажал «остановить». Не отправлять при error 'aborted' —
-      // он приходит при запуске нового распознавания (resume/fallback), тогда текст оставляем в поле.
+      // Keep text visible — user sends via button only
       const finalText = finalTranscriptRef.current.trim();
-      if (finalText && userRequestedStopRef.current) {
-        sendTextMessage(finalText);
-        finalTranscriptRef.current = '';
-        setInterimTranscript('');
+      if (finalText) {
+        setInterimTranscript(finalText);
       }
       if (event.error !== 'no-speech') {
         setError(`Ошибка распознавания речи: ${event.error}`);
