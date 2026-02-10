@@ -376,43 +376,38 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
-                    {/* Delete button — overlapping top-left corner */}
+                    {/* Delete button — overlapping top-left corner of the card */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute -top-1.5 -left-1.5 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-10"
+                      className="absolute -top-2 -left-2 p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-10"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Title + company + badges */}
-                    <div className="flex items-start gap-3 mb-4 pl-6">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <MessageSquare className="w-5 h-5 text-purple-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 leading-tight">
-                          {session.params.position || session.params.topic || 'AI Интервью'}
-                        </h3>
-                        {session.params.company && (
-                          <p className="text-base text-blue-600 font-bold mt-1">
-                            {session.params.company}
-                          </p>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 leading-tight">
+                        {session.params.position || session.params.topic || 'AI Интервью'}
+                      </h3>
+                      {session.params.company && (
+                        <p className="text-base text-blue-600 font-bold mt-1">
+                          {session.params.company}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-medium">
+                          {session.params.questions?.length || 0} {t.organizerDashboard.questions}
+                        </span>
+                        {session.params.customerSimulation?.enabled && (
+                          <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-sm font-medium">
+                            {t.organizerDashboard.situationModeling}
+                          </span>
                         )}
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
-                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-medium">
-                            {session.params.questions?.length || 0} {t.organizerDashboard.questions}
-                          </span>
-                          {session.params.customerSimulation?.enabled && (
-                            <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-sm font-medium">
-                              {t.organizerDashboard.situationModeling}
-                            </span>
-                          )}
-                          <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
-                            {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
-                          </span>
-                        </div>
+                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
+                          {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
+                        </span>
                       </div>
                     </div>
 
@@ -421,16 +416,24 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                       <button
                         type="button"
                         onClick={() => handleViewCandidates(session.id)}
-                        className="flex-1 px-2 py-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium"
+                        className="flex-1 px-2 py-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium rounded-xl relative"
                         style={{ backgroundColor: '#059669', color: '#ffffff' }}
                       >
                         <Users className="w-4 h-4" style={{ color: '#ffffff' }} />
                         <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
+                        {(() => {
+                          const count = results.filter(r => r.sessionId === session.id).length;
+                          return count > 0 ? (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-white">
+                              {count}
+                            </span>
+                          ) : null;
+                        })()}
                       </button>
                       <button
                         type="button"
                         onClick={() => setSelectedSessionForLinks(session)}
-                        className="flex-1 px-2 py-2 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium"
+                        className="flex-1 px-2 py-2 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium rounded-xl"
                       >
                         <LinkIcon className="w-4 h-4" />
                         <span>{language === 'ru' ? 'Создать ссылку' : 'Create link'}</span>
@@ -438,7 +441,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                       <button
                         type="button"
                         onClick={() => openQRModal(session)}
-                        className="flex-1 px-2 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium"
+                        className="flex-1 px-2 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors flex flex-col items-center justify-center gap-1 text-xs font-medium rounded-xl"
                       >
                         <QrCode className="w-4 h-4" />
                         <span>{t.organizerDashboard.downloadQR}</span>
