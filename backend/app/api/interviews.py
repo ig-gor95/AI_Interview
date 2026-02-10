@@ -178,7 +178,7 @@ async def create_interview(
         position=session_data.params.position,
         company=session_data.params.company,
         difficulty=Difficulty.INTERMEDIATE,  # Default value
-        duration=30,  # Default value
+        duration=15,  # Default value
         language=Language.RU,  # Default value
         personality=Personality.PROFESSIONAL,  # Default value
         share_url=share_url,

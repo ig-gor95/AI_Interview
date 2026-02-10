@@ -372,7 +372,7 @@ export function InterviewSessionView() {
           setIsSpeaking(true);
           setIsProcessing(false);
           isUserTurnRef.current = false;
-          stopTimer();
+          startTimer(); // Timer runs during TTS playback
 
           const fullText = data.message || '';
           const audioUrlResolved = fullAudioUrl(data.audio_url) ?? data.audio_url;
@@ -517,10 +517,9 @@ export function InterviewSessionView() {
     }
   };
 
-  // Timer management
+  // Timer management — runs during TTS playback and user's turn, stops only during GPT processing
   const startTimer = () => {
     if (timerIntervalRef.current) return; // Already running
-    if (!isUserTurnRef.current) return; // Not user's turn
     if (timeExpired) return; // Time already expired
     
     if (timeRemaining !== null && timeRemaining > 0) {
