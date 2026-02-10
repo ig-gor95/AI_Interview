@@ -485,28 +485,28 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
-                    {/* Delete button — top-right corner inside card */}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute top-3 right-3 p-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors shadow-md z-20"
-                      title={language === 'ru' ? 'Удалить' : 'Delete'}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Edit button — to the left of delete button */}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                      className="absolute top-3 right-12 p-1 bg-blue-500 text-white hover:bg-blue-600 rounded-md transition-colors shadow-md z-20"
-                      title={language === 'ru' ? 'Редактировать' : 'Edit'}
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Buttons in TOP RIGHT corner */}
+                    <div className="absolute top-3 right-3 flex gap-2 z-20">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
+                        className="p-1.5 bg-blue-500 text-white hover:bg-blue-600 rounded-md transition-colors shadow-md"
+                        title={language === 'ru' ? 'Редактировать' : 'Edit'}
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
+                        className="p-1.5 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors shadow-md"
+                        title={language === 'ru' ? 'Удалить' : 'Delete'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
 
                     {/* Title + company + badges */}
-                    <div className="mb-4">
+                    <div className="mb-4 pr-20">
                       <h3 className="text-lg font-semibold text-gray-900 leading-tight">
                         {session.params.position || session.params.topic || 'AI Интервью'}
                       </h3>
