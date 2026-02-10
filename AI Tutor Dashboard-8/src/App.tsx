@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom';
 import { User, Session } from '@/types';
-import { getCurrentUser, login as authLogin, logout as authLogout, signup as authSignup } from './lib/auth';
+import { getCurrentUser, login as authLogin, logout as authLogout, signup as authSignup, refreshCurrentUser } from './lib/auth';
 import { getSessions, getSessionById } from './lib/mockData';
 import { publicAPI, interviewsAPI } from './lib/api';
 import { Landing } from './components/Landing';
@@ -25,16 +25,28 @@ function AppContent() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is logged in on mount
+    // Check if user is logged in on mount and validate token
     const currentUser = getCurrentUser();
     if (currentUser) {
-      setUser(currentUser);
-      if (currentUser.role === 'organizer') {
-        loadInterviews();
-      } else {
-        // For students, still use mockData for now
-        setSessions(getSessions());
-      }
+      // Validate token by fetching current user from API
+      refreshCurrentUser()
+        .then((validUser) => {
+          if (validUser) {
+            setUser(validUser);
+            if (validUser.role === 'organizer') {
+              loadInterviews();
+            } else {
+              // For students, still use mockData for now
+              setSessions(getSessions());
+            }
+          }
+        })
+        .catch((error) => {
+          // Token is invalid or expired, clear everything
+          console.log('Token validation failed, logging out', error);
+          authLogout();
+          setUser(null);
+        });
     }
   }, []);
 

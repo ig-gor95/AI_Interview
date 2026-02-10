@@ -40,6 +40,16 @@ async function apiRequest<T>(
   });
 
   if (!response.ok) {
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      // Clear auth data and redirect to login
+      removeAuthToken();
+      localStorage.removeItem('currentUser');
+      // Reload page to trigger redirect to login
+      window.location.href = '/';
+      throw new Error('Session expired. Please log in again.');
+    }
+
     const error = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(error.detail || `HTTP error! status: ${response.status}`);
   }

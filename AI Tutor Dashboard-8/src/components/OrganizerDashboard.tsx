@@ -248,6 +248,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     try {
       await interviewsAPI.deleteInterview(interviewId);
       onRefresh();
+      loadResults(); // Refresh results immediately after deletion
     } catch (err) {
       console.error('Failed to delete interview:', err);
     }
