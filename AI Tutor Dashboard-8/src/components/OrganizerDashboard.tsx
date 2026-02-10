@@ -484,25 +484,25 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
-                  <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative overflow-visible">
-                    {/* Delete button — top-right corner, overlapping */}
+                  <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
+                    {/* Delete button — top-right corner inside card */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute -top-2 -right-2 p-2 bg-red-500 text-white hover:bg-red-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute top-3 right-3 p-1 bg-red-500 text-white hover:bg-red-600 rounded-md transition-colors shadow-md z-20"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Edit button — to the left of delete button, in right area */}
+                    {/* Edit button — to the left of delete button */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
-                      className="absolute -top-2 right-10 p-2 bg-blue-500 text-white hover:bg-blue-600 rounded-full transition-colors shadow-lg border-2 border-white z-20"
+                      className="absolute top-3 right-12 p-1 bg-blue-500 text-white hover:bg-blue-600 rounded-md transition-colors shadow-md z-20"
                       title={language === 'ru' ? 'Редактировать' : 'Edit'}
                     >
-                      <Edit2 className="w-4 h-4" />
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
 
                     {/* Title + company + badges */}
