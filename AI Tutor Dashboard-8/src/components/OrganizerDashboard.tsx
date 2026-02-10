@@ -376,39 +376,42 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
-                    {/* Delete button — top-right corner */}
+                    {/* Delete button — top-left corner, more visible */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm border border-gray-200"
+                      className="absolute top-3 left-3 p-2 bg-white text-red-500 hover:text-white hover:bg-red-500 rounded-lg transition-colors shadow-md border border-red-200 z-10"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
 
-                    {/* Title + company + badges in compact layout */}
-                    <div className="flex items-start gap-3 mb-3 pr-8">
-                      <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <MessageSquare className="w-4 h-4 text-purple-600" />
+                    {/* Company name — top-right corner */}
+                    {session.params.company && (
+                      <div className="absolute top-3 right-3 text-emerald-500 font-bold text-base">
+                        {session.params.company}
+                      </div>
+                    )}
+
+                    {/* Title + badges */}
+                    <div className="flex items-start gap-3 mb-4 mt-2 pl-12 pr-2">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-5 h-5 text-purple-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-semibold text-gray-900 leading-tight">
+                        <h3 className="text-lg font-semibold text-gray-900 leading-tight mb-2">
                           {session.params.position || session.params.topic || 'AI Интервью'}
                         </h3>
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-                          {session.params.company && (
-                            <span className="text-sm text-gray-500">{session.params.company}</span>
-                          )}
-                          {session.params.company && <span className="text-gray-300">|</span>}
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-medium">
                             {session.params.questions?.length || 0} {t.organizerDashboard.questions}
                           </span>
                           {session.params.customerSimulation?.enabled && (
-                            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
+                            <span className="px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-sm font-medium">
                               {t.organizerDashboard.situationModeling}
                             </span>
                           )}
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                          <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
                             {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
                           </span>
                         </div>
