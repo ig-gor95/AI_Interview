@@ -486,7 +486,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
                     {/* Buttons in TOP RIGHT corner */}
-                    <div className="absolute top-3 right-3 flex gap-2 z-20">
+                    <div className="absolute flex gap-2 z-20" style={{ top: '12px', right: '12px' }}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}
@@ -506,7 +506,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                     </div>
 
                     {/* Title + company + badges */}
-                    <div className="mb-4 pr-20">
+                    <div className="mb-4">
                       <h3 className="text-lg font-semibold text-gray-900 leading-tight">
                         {session.params.position || session.params.topic || 'AI Интервью'}
                       </h3>
