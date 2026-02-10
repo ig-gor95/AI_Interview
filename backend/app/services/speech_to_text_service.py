@@ -46,11 +46,44 @@ def _run_streaming_recognize(
         else:
             client = speech.SpeechClient()
 
+        # Speech context hints - список часто используемых технических терминов
+        # Это помогает Google Cloud Speech лучше распознавать специфические слова
+        speech_contexts = [
+            speech.SpeechContext(
+                phrases=[
+                    # Design & Collaboration tools
+                    "Figma", "Sketch", "Adobe XD", "InVision", "Miro", "Notion",
+                    # Project Management
+                    "Jira", "Trello", "Asana", "Monday", "ClickUp", "Confluence",
+                    # Development tools
+                    "GitHub", "GitLab", "Bitbucket", "Docker", "Kubernetes",
+                    # Frameworks & Libraries
+                    "React", "Vue", "Angular", "Next.js", "Nuxt", "Redux",
+                    "TypeScript", "JavaScript", "Python", "Java", "Golang",
+                    # Cloud & Infrastructure
+                    "AWS", "Azure", "Google Cloud", "Heroku", "Vercel", "Netlify",
+                    # Databases
+                    "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch",
+                    # Analytics & Marketing
+                    "Google Analytics", "Amplitude", "Mixpanel", "Segment",
+                    "Meta Ads", "Facebook Ads", "Google Ads", "TikTok Ads",
+                    # CRM & Sales
+                    "Salesforce", "HubSpot", "Pipedrive", "Zoho",
+                    # Communication
+                    "Slack", "Discord", "Telegram", "Zoom", "Teams",
+                    # Other common terms
+                    "API", "REST", "GraphQL", "WebSocket", "Postman",
+                    "CI/CD", "DevOps", "Agile", "Scrum", "Kanban",
+                ]
+            )
+        ]
+
         config = speech.RecognitionConfig(
             encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
             sample_rate_hertz=SAMPLE_RATE_HZ,
             language_code="ru-RU",
             alternative_language_codes=["en-US"],
+            speech_contexts=speech_contexts,
         )
         streaming_config = speech.StreamingRecognitionConfig(
             config=config,
