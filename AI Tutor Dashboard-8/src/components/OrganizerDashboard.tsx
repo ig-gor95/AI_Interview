@@ -373,14 +373,14 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                 </button>
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {userSessions.map((session) => (
                   <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
                     {/* Delete button — top-right corner */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
-                      className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      className="absolute top-3 right-3 p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shadow-sm border border-gray-200"
                       title={language === 'ru' ? 'Удалить' : 'Delete'}
                     >
                       <Trash2 className="w-4 h-4" />
