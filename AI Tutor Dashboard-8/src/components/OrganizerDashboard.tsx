@@ -453,7 +453,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                         {companyFilter && (
                           <button
                             onClick={() => setCompanyFilter('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
                           >
                             ✕
                           </button>
@@ -497,7 +497,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                         {positionFilter && (
                           <button
                             onClick={() => setPositionFilter('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
                           >
                             ✕
                           </button>
@@ -629,9 +629,6 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                             {t.organizerDashboard.situationModeling}
                           </span>
                         )}
-                        <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
-                          {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
-                        </span>
                       </div>
                     </div>
 
