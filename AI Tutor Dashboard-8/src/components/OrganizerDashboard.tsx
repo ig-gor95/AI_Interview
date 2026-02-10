@@ -44,6 +44,8 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
   const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
   const [companyFilter, setCompanyFilter] = useState<string>('');
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [positionFilter, setPositionFilter] = useState<string>('');
+  const [showPositionDropdown, setShowPositionDropdown] = useState(false);
 
   // Filter sessions and validate UUID format
   const allUserSessions = sessions.filter(s => {
@@ -66,15 +68,30 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     )
   ).sort((a, b) => a.localeCompare(b));
 
+  // Get unique positions for filter
+  const uniquePositions = Array.from(
+    new Set(
+      allUserSessions
+        .map(s => s.params.position || s.params.topic)
+        .filter((p): p is string => !!p && p.trim() !== '')
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
   // Filter companies by search input
   const filteredCompanies = uniqueCompanies.filter(company =>
     company.toLowerCase().includes(companyFilter.toLowerCase())
   );
 
-  // Apply company filter to sessions
+  // Filter positions by search input
+  const filteredPositions = uniquePositions.filter(position =>
+    position.toLowerCase().includes(positionFilter.toLowerCase())
+  );
+
+  // Apply company and position filters to sessions
   const userSessions = allUserSessions.filter(s => {
-    if (!companyFilter) return true;
-    return s.params.company?.toLowerCase().includes(companyFilter.toLowerCase());
+    const companyMatch = !companyFilter || s.params.company?.toLowerCase().includes(companyFilter.toLowerCase());
+    const positionMatch = !positionFilter || (s.params.position || s.params.topic)?.toLowerCase().includes(positionFilter.toLowerCase());
+    return companyMatch && positionMatch;
   });
   const [results, setResults] = useState<any[]>([]);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -400,48 +417,100 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
         {/* Content based on active tab */}
         {activeTab === 'manage' && (
           <div className="space-y-4">
-            {/* Company filter */}
-            {allUserSessions.length > 0 && uniqueCompanies.length > 0 && (
+            {/* Filters */}
+            {allUserSessions.length > 0 && (uniqueCompanies.length > 0 || uniquePositions.length > 0) && (
               <div className="bg-white rounded-lg p-4 border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {language === 'ru' ? 'Фильтр по компании' : 'Filter by company'}
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={companyFilter}
-                    onChange={(e) => setCompanyFilter(e.target.value)}
-                    onFocus={() => setShowCompanyDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 200)}
-                    placeholder={language === 'ru' ? 'Начните вводить название компании...' : 'Start typing company name...'}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  {companyFilter && (
-                    <button
-                      onClick={() => setCompanyFilter('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      ✕
-                    </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Company filter */}
+                  {uniqueCompanies.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {language === 'ru' ? 'Фильтр по компании' : 'Filter by company'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={companyFilter}
+                          onChange={(e) => setCompanyFilter(e.target.value)}
+                          onFocus={() => setShowCompanyDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 200)}
+                          placeholder={language === 'ru' ? 'Компания...' : 'Company...'}
+                          className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${companyFilter ? 'pr-10' : ''}`}
+                        />
+                        {companyFilter && (
+                          <button
+                            onClick={() => setCompanyFilter('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {showCompanyDropdown && filteredCompanies.length > 0 && (
+                          <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredCompanies.map((company) => (
+                              <button
+                                key={company}
+                                onClick={() => {
+                                  setCompanyFilter(company);
+                                  setShowCompanyDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors text-sm"
+                              >
+                                {company}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
-                  {showCompanyDropdown && filteredCompanies.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {filteredCompanies.map((company) => (
-                        <button
-                          key={company}
-                          onClick={() => {
-                            setCompanyFilter(company);
-                            setShowCompanyDropdown(false);
-                          }}
-                          className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors"
-                        >
-                          {company}
-                        </button>
-                      ))}
+
+                  {/* Position filter */}
+                  {uniquePositions.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {language === 'ru' ? 'Фильтр по вакансии' : 'Filter by position'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={positionFilter}
+                          onChange={(e) => setPositionFilter(e.target.value)}
+                          onFocus={() => setShowPositionDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowPositionDropdown(false), 200)}
+                          placeholder={language === 'ru' ? 'Вакансия...' : 'Position...'}
+                          className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${positionFilter ? 'pr-10' : ''}`}
+                        />
+                        {positionFilter && (
+                          <button
+                            onClick={() => setPositionFilter('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg leading-none"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {showPositionDropdown && filteredPositions.length > 0 && (
+                          <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredPositions.map((position) => (
+                              <button
+                                key={position}
+                                onClick={() => {
+                                  setPositionFilter(position);
+                                  setShowPositionDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors text-sm"
+                              >
+                                {position}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+
+                <p className="text-xs text-gray-500 mt-3">
                   {language === 'ru'
                     ? `Показано ${userSessions.length} из ${allUserSessions.length} интервью`
                     : `Showing ${userSessions.length} of ${allUserSessions.length} interviews`
@@ -471,15 +540,38 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
               <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
                 <p className="text-gray-600 mb-4">
                   {language === 'ru'
-                    ? 'Не найдено интервью для выбранной компании'
-                    : 'No interviews found for selected company'}
+                    ? 'Не найдено интервью по выбранным фильтрам'
+                    : 'No interviews found for selected filters'}
                 </p>
-                <button
-                  onClick={() => setCompanyFilter('')}
-                  className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  {language === 'ru' ? 'Сбросить фильтр' : 'Reset filter'}
-                </button>
+                <div className="flex gap-2 justify-center">
+                  {companyFilter && (
+                    <button
+                      onClick={() => setCompanyFilter('')}
+                      className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {language === 'ru' ? 'Сбросить компанию' : 'Reset company'}
+                    </button>
+                  )}
+                  {positionFilter && (
+                    <button
+                      onClick={() => setPositionFilter('')}
+                      className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {language === 'ru' ? 'Сбросить вакансию' : 'Reset position'}
+                    </button>
+                  )}
+                  {(companyFilter || positionFilter) && (
+                    <button
+                      onClick={() => {
+                        setCompanyFilter('');
+                        setPositionFilter('');
+                      }}
+                      className="px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {language === 'ru' ? 'Сбросить все' : 'Reset all'}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
