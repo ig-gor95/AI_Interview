@@ -59,23 +59,35 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     return true;
   });
 
-  // Get unique companies for filter
+  // Get unique companies for filter (case-insensitive deduplication)
   const uniqueCompanies = Array.from(
-    new Set(
-      allUserSessions
-        .map(s => s.params.company)
-        .filter((c): c is string => !!c && c.trim() !== '')
-    )
-  ).sort((a, b) => a.localeCompare(b));
+    allUserSessions
+      .map(s => s.params.company)
+      .filter((c): c is string => !!c && c.trim() !== '')
+      .reduce((map, company) => {
+        const key = company.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, company);
+        }
+        return map;
+      }, new Map<string, string>())
+      .values()
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-  // Get unique positions for filter
+  // Get unique positions for filter (case-insensitive deduplication)
   const uniquePositions = Array.from(
-    new Set(
-      allUserSessions
-        .map(s => s.params.position || s.params.topic)
-        .filter((p): p is string => !!p && p.trim() !== '')
-    )
-  ).sort((a, b) => a.localeCompare(b));
+    allUserSessions
+      .map(s => s.params.position || s.params.topic)
+      .filter((p): p is string => !!p && p.trim() !== '')
+      .reduce((map, position) => {
+        const key = position.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, position);
+        }
+        return map;
+      }, new Map<string, string>())
+      .values()
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
   // Filter companies by search input
   const filteredCompanies = uniqueCompanies.filter(company =>
