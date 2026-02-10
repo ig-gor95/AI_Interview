@@ -343,7 +343,14 @@ async def update_interview(
     interview.position = session_data.params.position
     interview.company = session_data.params.company
 
-    # Delete existing questions
+    # Check if there are completed sessions for this interview
+    from app.models.session import Session
+    result_check = await db.execute(
+        select(Session).where(Session.interview_id == interview.id).limit(1)
+    )
+    has_sessions = result_check.scalar_one_or_none() is not None
+
+    # Delete existing questions (safe - no FK constraints)
     await db.execute(
         delete(InterviewQuestion).where(InterviewQuestion.interview_id == interview.id)
     )
@@ -370,34 +377,37 @@ async def update_interview(
                     )
                     db.add(child_question)
 
-    # Delete existing evaluation criteria
-    await db.execute(
-        delete(InterviewEvaluationCriterion).where(InterviewEvaluationCriterion.interview_id == interview.id)
-    )
+    # Only update criteria if there are no completed sessions
+    # (otherwise we'll break FK constraints with session results)
+    if not has_sessions:
+        # Delete existing evaluation criteria
+        await db.execute(
+            delete(InterviewEvaluationCriterion).where(InterviewEvaluationCriterion.interview_id == interview.id)
+        )
 
-    # Add new evaluation criteria
-    criteria_index = 0
-    if session_data.params.must_have_requirements:
-        for requirement in session_data.params.must_have_requirements:
-            eval_criterion = InterviewEvaluationCriterion(
-                interview_id=interview.id,
-                criterion_name=requirement,
-                is_required=True,
-                order_index=criteria_index
-            )
-            db.add(eval_criterion)
-            criteria_index += 1
+        # Add new evaluation criteria
+        criteria_index = 0
+        if session_data.params.must_have_requirements:
+            for requirement in session_data.params.must_have_requirements:
+                eval_criterion = InterviewEvaluationCriterion(
+                    interview_id=interview.id,
+                    criterion_name=requirement,
+                    is_required=True,
+                    order_index=criteria_index
+                )
+                db.add(eval_criterion)
+                criteria_index += 1
 
-    if session_data.params.nice_to_have_requirements:
-        for requirement in session_data.params.nice_to_have_requirements:
-            eval_criterion = InterviewEvaluationCriterion(
-                interview_id=interview.id,
-                criterion_name=requirement,
-                is_required=False,
-                order_index=criteria_index
-            )
-            db.add(eval_criterion)
-            criteria_index += 1
+        if session_data.params.nice_to_have_requirements:
+            for requirement in session_data.params.nice_to_have_requirements:
+                eval_criterion = InterviewEvaluationCriterion(
+                    interview_id=interview.id,
+                    criterion_name=requirement,
+                    is_required=False,
+                    order_index=criteria_index
+                )
+                db.add(eval_criterion)
+                criteria_index += 1
 
     # Update config
     if interview.config:
