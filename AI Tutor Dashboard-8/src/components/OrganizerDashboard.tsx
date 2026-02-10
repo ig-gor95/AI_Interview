@@ -446,7 +446,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                           </button>
                         )}
                         {showCompanyDropdown && filteredCompanies.length > 0 && (
-                          <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                             {filteredCompanies.map((company) => (
                               <button
                                 key={company}
@@ -490,7 +490,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
                           </button>
                         )}
                         {showPositionDropdown && filteredPositions.length > 0 && (
-                          <div className="absolute z-30 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                             {filteredPositions.map((position) => (
                               <button
                                 key={position}
