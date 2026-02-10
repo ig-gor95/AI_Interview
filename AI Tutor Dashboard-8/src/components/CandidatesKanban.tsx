@@ -1,28 +1,33 @@
-import { CheckCircle, AlertTriangle, X, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle, X, AlertCircle, Loader2, Mail } from 'lucide-react';
 import { useAtom } from 'jotai';
 import { languageAtom } from '@/lib/i18n';
-import { Session } from '@/types';
-import { scoreToQualityRating, type QualityRating } from '@/lib/qualityRating';
+import type { QualityRating } from '@/lib/qualityRating';
+
+interface CriterionResult {
+  name: string;
+  passes: number; // -1 = not met, 0 = partial, 1 = met
+}
 
 interface Result {
   id: string;
   studentName: string;
+  studentSurname?: string;
   studentEmail?: string;
   sessionId: string;
   score?: number;
   qualityRating?: QualityRating;
   completedAt?: string | null;
-  transcript?: Array<{ role: string; message?: string; content?: string }>;
-  requirementChecks?: Array<{ requirement: string; fact: string; status: 'met' | 'partial' | 'not_met' }>;
+  evaluationStatus?: string; // pending | in_progress | completed | failed
+  criterionResults?: CriterionResult[];
 }
 
 interface Props {
   results: Result[];
-  sessions: Session[];
+  sessions?: unknown[];
   onViewEvaluation?: (sessionId: string) => void;
 }
 
-export function CandidatesKanban({ results, sessions, onViewEvaluation }: Props) {
+export function CandidatesKanban({ results, onViewEvaluation }: Props) {
   const [language] = useAtom(languageAtom);
 
   const translations = {
@@ -31,84 +36,77 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation }: Props)
       possible: 'ВОЗМОЖНО',
       notRecommended: 'НЕ ПОДХОДИТ',
       clickToView: 'Нажмите для просмотра детального отчёта →',
+      evaluating: 'Оценка формируется...',
+      pending: 'Ожидание оценки',
+      score: 'Оценка',
+      criteria: 'Критерии',
     },
     en: {
       recommended: 'RECOMMENDED',
       possible: 'POSSIBLY SUITABLE',
       notRecommended: 'NOT SUITABLE',
       clickToView: 'Click to view detailed report →',
+      evaluating: 'Evaluation in progress...',
+      pending: 'Pending evaluation',
+      score: 'Score',
+      criteria: 'Criteria',
     }
   };
 
   const t = translations[language];
 
-  const getNumericRating = (result: Result): number => {
-    const qualityRating = result.qualityRating || (result.score ? scoreToQualityRating(result.score) : 'suitable');
-
-    const ratingMap: Record<QualityRating, number> = {
-      outstanding: 9.2,
-      strong: 7.8,
-      promising: 6.1,
-      suitable: 4.5
-    };
-
-    return ratingMap[qualityRating] || 5.0;
+  // Calculate score from criterion results: (met*1 + partial*0 + not_met*-1 + total) / (2*total) * 10
+  const getScoreFromCriteria = (criteria: CriterionResult[]): number | null => {
+    if (!criteria || criteria.length === 0) return null;
+    const sum = criteria.reduce((acc, c) => acc + c.passes, 0);
+    // Map from range [-total, +total] to [0, 10]
+    return Math.round(((sum + criteria.length) / (2 * criteria.length)) * 100) / 10;
   };
 
-  const getVerdict = (rating: number): 'recommended' | 'possible' | 'not_recommended' => {
-    if (rating >= 7.5) return 'recommended';
-    if (rating >= 5.0) return 'possible';
+  const getVerdict = (result: Result): 'recommended' | 'possible' | 'not_recommended' => {
+    const criteria = result.criterionResults;
+    if (criteria && criteria.length > 0) {
+      const score = getScoreFromCriteria(criteria)!;
+      if (score >= 7.5) return 'recommended';
+      if (score >= 5.0) return 'possible';
+      return 'not_recommended';
+    }
+    // Fallback to backend score
+    if (result.score != null) {
+      if (result.score >= 75) return 'recommended';
+      if (result.score >= 50) return 'possible';
+      return 'not_recommended';
+    }
     return 'not_recommended';
   };
 
-  const getHighlights = (result: Result, rating: number): Array<{ type: 'positive' | 'warning' | 'negative'; text: string }> => {
-    const highlights: Array<{ type: 'positive' | 'warning' | 'negative'; text: string }> = [];
+  const hasEvaluation = (result: Result) => result.evaluationStatus === 'completed';
+  const isEvaluating = (result: Result) => result.evaluationStatus === 'in_progress';
 
-    if (result.requirementChecks && result.requirementChecks.length > 0) {
-      result.requirementChecks.forEach(check => {
-        if (check.status === 'met') {
-          highlights.push({ type: 'positive', text: `${check.requirement}: ${check.fact}` });
-        } else if (check.status === 'partial') {
-          highlights.push({ type: 'warning', text: `${check.requirement}: ${check.fact}` });
-        } else if (check.status === 'not_met') {
-          highlights.push({ type: 'negative', text: `${check.requirement}: ${check.fact}` });
-        }
-      });
-      return highlights.slice(0, 2);
-    }
-
-    if (rating >= 8) {
-      highlights.push({ type: 'positive', text: language === 'ru' ? 'Чёткая речь' : 'Clear speech' });
-      highlights.push({ type: 'positive', text: language === 'ru' ? 'Профессиональная лексика' : 'Professional vocabulary' });
-    } else if (rating >= 7) {
-      highlights.push({ type: 'positive', text: language === 'ru' ? 'Релевантный опыт' : 'Relevant experience' });
-      highlights.push({ type: 'warning', text: language === 'ru' ? 'Стандартные ответы' : 'Standard answers' });
-    } else if (rating >= 5) {
-      highlights.push({ type: 'warning', text: language === 'ru' ? 'Неуверенные ответы' : 'Uncertain answers' });
-      highlights.push({ type: 'warning', text: language === 'ru' ? 'Требует уточнений' : 'Requires clarification' });
-    } else {
-      highlights.push({ type: 'negative', text: language === 'ru' ? 'Бессвязная речь' : 'Incoherent speech' });
-      highlights.push({ type: 'negative', text: language === 'ru' ? 'Избегает вопросов' : 'Avoids questions' });
-    }
-
-    return highlights.slice(0, 2);
-  };
-
-  const candidates = results.map(result => {
-    const rating = getNumericRating(result);
-    return {
-      id: result.id,
-      name: result.studentName,
-      score: rating,
-      verdict: getVerdict(rating),
-      highlights: getHighlights(result, rating),
-      sessionId: result.sessionId
-    };
-  });
+  const candidates = results.map(result => ({
+    id: result.id,
+    name: result.studentName,
+    surname: result.studentSurname || '',
+    email: result.studentEmail || '',
+    verdict: getVerdict(result),
+    score: result.score,
+    criteriaScore: getScoreFromCriteria(result.criterionResults || []),
+    criterionResults: result.criterionResults || [],
+    sessionId: result.sessionId,
+    evaluated: hasEvaluation(result),
+    evaluating: isEvaluating(result),
+    evaluationStatus: result.evaluationStatus || 'pending',
+  }));
 
   const recommendedCandidates = candidates.filter(c => c.verdict === 'recommended');
   const possibleCandidates = candidates.filter(c => c.verdict === 'possible');
   const notRecommendedCandidates = candidates.filter(c => c.verdict === 'not_recommended');
+
+  const getScoreColor = (score: number) => {
+    if (score >= 7.5) return 'text-green-700 bg-green-50 border-green-200';
+    if (score >= 5.0) return 'text-amber-700 bg-amber-50 border-amber-200';
+    return 'text-red-700 bg-red-50 border-red-200';
+  };
 
   const renderCard = (candidate: typeof candidates[0]) => (
     <div
@@ -116,28 +114,74 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation }: Props)
       onClick={() => onViewEvaluation?.(candidate.sessionId)}
       className="bg-white border border-gray-200 hover:border-gray-400 rounded-lg p-4 cursor-pointer transition-all duration-200 hover:shadow-lg group"
     >
-      <div className="flex items-start justify-between mb-3 pb-3 border-b border-gray-100">
-        <h3 className="font-semibold text-gray-900 text-sm leading-tight flex-1 pr-2">
-          {candidate.name}
+      {/* Name + Email */}
+      <div className="mb-3 pb-3 border-b border-gray-100">
+        <h3 className="font-semibold text-gray-900 text-sm leading-tight">
+          {candidate.name}{candidate.surname ? ` ${candidate.surname}` : ''}
         </h3>
+        {candidate.email && (
+          <div className="flex items-center gap-1 mt-1">
+            <Mail className="w-3 h-3 text-gray-400 flex-shrink-0" />
+            <span className="text-xs text-gray-500 truncate">{candidate.email}</span>
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2">
-        {candidate.highlights.slice(0, 2).map((highlight, idx) => (
-          <div key={idx} className="flex items-center gap-2">
-            {highlight.type === 'positive' && (
-              <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-            )}
-            {highlight.type === 'warning' && (
-              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-            )}
-            {highlight.type === 'negative' && (
-              <X className="w-4 h-4 text-red-600 flex-shrink-0" />
-            )}
-            <span className="text-xs text-gray-700 leading-tight">{highlight.text}</span>
-          </div>
-        ))}
-      </div>
+      {/* Evaluation content */}
+      {!candidate.evaluated ? (
+        /* Loading / Pending state */
+        <div className="flex items-center gap-2 py-2">
+          {candidate.evaluating ? (
+            <>
+              <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
+              <span className="text-xs text-blue-600">{t.evaluating}</span>
+            </>
+          ) : (
+            <>
+              <Loader2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <span className="text-xs text-gray-500">{t.pending}</span>
+            </>
+          )}
+        </div>
+      ) : (
+        /* Evaluated — show score + criteria */
+        <div className="space-y-2">
+          {/* Overall score */}
+          {candidate.criteriaScore != null && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">{t.score}</span>
+              <span className={`text-sm font-bold px-2 py-0.5 rounded border ${getScoreColor(candidate.criteriaScore)}`}>
+                {candidate.criteriaScore.toFixed(1)}/10
+              </span>
+            </div>
+          )}
+
+          {/* Criterion results */}
+          {candidate.criterionResults.length > 0 && (
+            <div className="space-y-1">
+              {candidate.criterionResults.slice(0, 4).map((cr, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  {cr.passes === 1 && (
+                    <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                  )}
+                  {cr.passes === 0 && (
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                  )}
+                  {cr.passes === -1 && (
+                    <X className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                  )}
+                  <span className="text-xs text-gray-700 leading-tight truncate">{cr.name}</span>
+                </div>
+              ))}
+              {candidate.criterionResults.length > 4 && (
+                <span className="text-xs text-gray-400">
+                  +{candidate.criterionResults.length - 4} {language === 'ru' ? 'ещё' : 'more'}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 pt-3 border-t border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity">
         <span className="text-xs text-gray-500">{t.clickToView}</span>

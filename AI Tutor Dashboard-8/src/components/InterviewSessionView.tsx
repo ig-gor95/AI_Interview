@@ -87,6 +87,7 @@ export function InterviewSessionView() {
   const sttScriptNodeRef = useRef<ScriptProcessorNode | null>(null);
   const sttMediaStreamRef = useRef<MediaStream | null>(null);
   const sttInt16BufferRef = useRef<number[]>([]);
+  const handleWebSocketMessageRef = useRef<((data: any) => void) | null>(null);
   const STT_CHUNK_BYTES = 3200; // 100 ms at 16kHz mono 16-bit
 
   const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
@@ -239,7 +240,7 @@ export function InterviewSessionView() {
       try {
         const data: WebSocketMessage = JSON.parse(event.data);
         console.log('WebSocket message received:', data.type, data);
-        handleWebSocketMessage(data);
+        handleWebSocketMessageRef.current?.(data);
       } catch (error) {
         console.error('Error parsing WebSocket message:', error, event.data);
       }
@@ -516,6 +517,8 @@ export function InterviewSessionView() {
         console.log('Unknown message type:', data.type);
     }
   };
+  // Keep ref in sync so WebSocket always calls the latest handler (avoids stale closure)
+  handleWebSocketMessageRef.current = handleWebSocketMessage;
 
   // Timer management — runs during TTS playback and user's turn, stops only during GPT processing
   const startTimer = () => {

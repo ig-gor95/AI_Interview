@@ -142,6 +142,7 @@ async def get_interviews(
             selectinload(Interview.config)
         )
         .where(Interview.organizer_id == current_user.id)
+        .where(Interview.is_active == True)
         .order_by(Interview.created_at.desc())
     )
     interviews = result.scalars().all()
@@ -159,6 +160,31 @@ async def get_interviews(
             updated_at=interview.updated_at
         ))
     return result_list
+
+
+@router.delete("/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_interview(
+    interview_id: str,
+    current_user: User = Depends(get_current_organizer),
+    db: AsyncSession = Depends(get_db)
+):
+    """Soft-delete interview (set is_active=False)"""
+    try:
+        interview_uuid = uuid.UUID(interview_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid interview_id format")
+
+    result = await db.execute(
+        select(Interview)
+        .where(Interview.id == interview_uuid)
+        .where(Interview.organizer_id == current_user.id)
+    )
+    interview = result.scalar_one_or_none()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    interview.is_active = False
+    await db.commit()
 
 
 @router.post("", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)

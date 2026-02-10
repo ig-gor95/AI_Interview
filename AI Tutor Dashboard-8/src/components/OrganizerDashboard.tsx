@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, HelpCircle, QrCode } from 'lucide-react';
+import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, HelpCircle, QrCode, Trash2 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useAtom } from 'jotai';
 import { languageAtom, useTranslation } from '@/lib/i18n';
@@ -177,6 +177,17 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
     } else {
       setSelectedInterviewId(interviewId);
       setActiveTab('students');
+    }
+  };
+
+  const handleDeleteInterview = async (interviewId: string) => {
+    const msg = language === 'ru' ? 'Удалить это интервью?' : 'Delete this interview?';
+    if (!window.confirm(msg)) return;
+    try {
+      await interviewsAPI.deleteInterview(interviewId);
+      onRefresh();
+    } catch (err) {
+      console.error('Failed to delete interview:', err);
     }
   };
 
@@ -364,98 +375,72 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onViewEvaluation
             ) : (
               <div className="grid gap-4">
                 {userSessions.map((session) => (
-                  <div key={session.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-md transition-all">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-start gap-3 mb-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <MessageSquare className="w-5 h-5 text-purple-600" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="mb-2">
-                              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t.organizerDashboard.jobLabel}</span>
-                              <h3 className="text-lg text-gray-900 mt-0.5">
-                                {session.params.position || session.params.topic || 'AI Интервью'}
-                              </h3>
-                            </div>
-                            {session.params.company && (
-                              <p className="text-sm text-gray-600 mb-2">{session.params.company}</p>
-                            )}
-                            <div className="flex flex-wrap gap-2">
-                              <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-                                {session.params.questions?.length || 0} {t.organizerDashboard.questions}
-                              </span>
-                              {session.params.customerSimulation?.enabled && (
-                                <span className="px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
-                                  {t.organizerDashboard.situationModeling}
-                                </span>
-                              )}
-                              <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                                {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                  <div key={session.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:shadow-md transition-all relative">
+                    {/* Delete button — top-right corner */}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteInterview(session.id); }}
+                      className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title={language === 'ru' ? 'Удалить' : 'Delete'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
 
-                        <div className="pl-13 space-y-2 text-sm">
-                          {session.params.goals && session.params.goals.length > 0 && (
-                            <div>
-                              <span className="text-gray-600">{t.organizerDashboard.checkingLabel}: </span>
-                              <span className="text-gray-900">{session.params.goals.join(', ')}</span>
-                            </div>
+                    {/* Title + company + badges in compact layout */}
+                    <div className="flex items-start gap-3 mb-3 pr-8">
+                      <div className="w-9 h-9 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-base font-semibold text-gray-900 leading-tight">
+                          {session.params.position || session.params.topic || 'AI Интервью'}
+                        </h3>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                          {session.params.company && (
+                            <span className="text-sm text-gray-500">{session.params.company}</span>
                           )}
-                          <div>
-                            <span className="text-gray-600">{t.organizerDashboard.createdLabel}: </span>
-                            <span className="text-gray-900">
-                              {new Date(session.createdAt).toLocaleString('ru-RU')}
+                          {session.params.company && <span className="text-gray-300">|</span>}
+                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                            {session.params.questions?.length || 0} {t.organizerDashboard.questions}
+                          </span>
+                          {session.params.customerSimulation?.enabled && (
+                            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs font-medium">
+                              {t.organizerDashboard.situationModeling}
                             </span>
-                          </div>
+                          )}
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                            {session.params.language === 'ru' ? t.organizerDashboard.russian : t.organizerDashboard.english}
+                          </span>
                         </div>
                       </div>
+                    </div>
 
-                      <div className="flex flex-col gap-2 sm:items-end">
-                        <button
-                          type="button"
-                          onClick={() => handleViewCandidates(session.id)}
-                          className="px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-2 text-sm whitespace-nowrap hover:opacity-90"
-                          style={{ backgroundColor: '#059669', color: 'white' }}
-                        >
-                          <Users className="w-4 h-4" style={{ color: 'white' }} />
-                          <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSessionForLinks(session)}
-                          className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 flex items-center gap-2 text-sm whitespace-nowrap"
-                        >
-                          <LinkIcon className="w-4 h-4" />
-                          <span>{t.organizerDashboard.uniqueLinks}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openQRModal(session)}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm whitespace-nowrap"
-                        >
-                          <QrCode className="w-4 h-4" />
-                          <span>{t.organizerDashboard.downloadQR}</span>
-                        </button>
-                        <button
-                          onClick={() => copyToClipboard(session.id, session.shareUrl)}
-                          className="px-4 py-2 border border-blue-300 text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center gap-2 text-sm whitespace-nowrap"
-                        >
-                          {copiedId === session.id ? (
-                            <>
-                              <Check className="w-4 h-4" />
-                              <span>{t.organizerDashboard.copied}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-4 h-4" />
-                              <span>{t.organizerDashboard.testLink}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+                    {/* Action buttons — horizontal row */}
+                    <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+                      <button
+                        type="button"
+                        onClick={() => handleViewCandidates(session.id)}
+                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1.5 text-sm"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>{t.organizerDashboard.candidatesButton || 'Кандидаты'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSessionForLinks(session)}
+                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-1.5 text-sm"
+                      >
+                        <LinkIcon className="w-3.5 h-3.5" />
+                        <span>{language === 'ru' ? 'Создать ссылку' : 'Create link'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openQRModal(session)}
+                        className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 text-sm"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        <span>{t.organizerDashboard.downloadQR}</span>
+                      </button>
                     </div>
                   </div>
                 ))}

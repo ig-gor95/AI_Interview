@@ -132,6 +132,12 @@ export const interviewsAPI = {
     }[]>(`/interviews/${interviewId}/links`);
   },
 
+  async deleteInterview(interviewId: string) {
+    return apiRequest<void>(`/interviews/${interviewId}`, {
+      method: 'DELETE',
+    });
+  },
+
   async deleteLink(interviewId: string, linkId: string) {
     return apiRequest<void>(`/interviews/${interviewId}/links/${linkId}`, {
       method: 'DELETE',

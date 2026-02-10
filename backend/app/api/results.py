@@ -31,6 +31,7 @@ from app.schemas.result import (
     CandidateListResponse,
     CandidateListItemResponse,
     CandidateDetailResponse,
+    CriterionSummaryItem,
     QualityRating,
     RecommendationStatus
 )
@@ -137,7 +138,7 @@ async def get_candidates(
             .where(Session.status.in_([SessionStatus.COMPLETED, SessionStatus.IN_PROGRESS]))
             .where(has_transcript)
             .options(
-                selectinload(Session.evaluation),
+                selectinload(Session.evaluation).selectinload(SessionEvaluation.criterion_results).selectinload(SessionEvaluationCriterionResult.criterion),
                 selectinload(Session.interview)
             )
         )
@@ -197,11 +198,19 @@ async def get_candidates(
             position = None
             if session.interview:
                 position = getattr(session.interview, "position", None) or getattr(session.interview, "title", None)
+            # Build criterion results from evaluation
+            criteria_items = []
+            if evaluation and hasattr(evaluation, 'criterion_results') and evaluation.criterion_results:
+                for cr in evaluation.criterion_results:
+                    crit_name = cr.criterion.criterion_name if cr.criterion else "Unknown"
+                    criteria_items.append(CriterionSummaryItem(name=crit_name, passes=cr.passes))
+
             results_list.append(CandidateListItemResponse(
                 id=str(evaluation.id) if evaluation else str(session.id),
                 sessionId=str(session.id),
                 studentId=str(session.candidate_id) if session.candidate_id else None,
                 studentName=session.candidate_name,
+                studentSurname=getattr(session, 'candidate_surname', None),
                 studentEmail=session.candidate_email,
                 startedAt=session.started_at or session.created_at,
                 completedAt=completed_at,
@@ -212,7 +221,8 @@ async def get_candidates(
                 transcriptCount=counts["total"],
                 userMessageCount=counts["user"],
                 position=position,
-                evaluationStatus=session.evaluation_status.value if hasattr(session, 'evaluation_status') and session.evaluation_status else 'pending'
+                evaluationStatus=session.evaluation_status.value if hasattr(session, 'evaluation_status') and session.evaluation_status else 'pending',
+                criterionResults=criteria_items,
             ))
         
         return CandidateListResponse(results=results_list, total=len(results_list))

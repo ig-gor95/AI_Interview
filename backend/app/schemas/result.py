@@ -55,12 +55,22 @@ class CandidateStatisticsResponse(BaseModel):
         populate_by_name = True
 
 
+class CriterionSummaryItem(BaseModel):
+    """Lightweight criterion result for candidate card"""
+    name: str
+    passes: int  # -1 = not met, 0 = partial, 1 = met
+
+    class Config:
+        populate_by_name = True
+
+
 class CandidateListItemResponse(BaseModel):
     """Candidate list item - simplified version for list view (no transcript)"""
     id: str
     session_id: str = Field(alias="sessionId")
     student_id: Optional[str] = Field(None, alias="studentId")
     student_name: Optional[str] = Field(None, alias="studentName")
+    student_surname: Optional[str] = Field(None, alias="studentSurname")
     student_email: Optional[str] = Field(None, alias="studentEmail")
     started_at: Optional[datetime] = Field(None, alias="startedAt")
     completed_at: Optional[datetime] = Field(None, alias="completedAt")
@@ -72,6 +82,7 @@ class CandidateListItemResponse(BaseModel):
     user_message_count: Optional[int] = Field(None, alias="userMessageCount")
     position: Optional[str] = None
     evaluation_status: EvaluationStatusType = Field(default='pending', alias="evaluationStatus")
+    criterion_results: List[CriterionSummaryItem] = Field(default_factory=list, alias="criterionResults")
 
     class Config:
         populate_by_name = True
