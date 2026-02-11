@@ -1,0 +1,97 @@
+# Production Docker Compose для VK Cloud
+# Использует managed PostgreSQL от VK Cloud вместо контейнера
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai_hr_backend
+    environment:
+      # Database - использует managed PostgreSQL от VK Cloud
+      DATABASE_URL: ${DATABASE_URL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+      # AI Services
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/gcp-credentials.json}
+
+      # TTS Settings
+      TTS_VOICE_NAME: ${TTS_VOICE_NAME:-ru-RU-Chirp3-HD-Orus}
+      TTS_LANGUAGE_CODE: ${TTS_LANGUAGE_CODE:-ru-RU}
+      TTS_SPEAKING_RATE: ${TTS_SPEAKING_RATE:-1.0}
+      TTS_PITCH: ${TTS_PITCH:-0.0}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+
+      # CORS - добавьте ваш домен
+      CORS_ORIGINS: ${CORS_ORIGINS}
+
+      # Environment
+      ENVIRONMENT: production
+      DEBUG: "false"
+
+      # Storage
+      AUDIO_STORAGE_PATH: /app/audio_files
+      MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-50}
+
+      # Analyzers
+      ENABLED_ANALYZERS: ${ENABLED_ANALYZERS:-gpt_content_analyzer,clarity_analyzer}
+      PRONUNCIATION_WEIGHT: ${PRONUNCIATION_WEIGHT:-0.2}
+      CLARITY_WEIGHT: ${CLARITY_WEIGHT:-0.15}
+      GPT_CONTENT_WEIGHT: ${GPT_CONTENT_WEIGHT:-0.5}
+      STRESS_HANDLING_WEIGHT: ${STRESS_HANDLING_WEIGHT:-0.15}
+
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent storage для аудио файлов
+      - audio_files:/app/audio_files
+      # GCP credentials (если используется файл)
+      - ./gcp-credentials.json:/app/gcp-credentials.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai_hr_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./AI Tutor Dashboard-8
+      dockerfile: Dockerfile
+    container_name: ai_hr_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ai_hr_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  audio_files:
+    driver: local
+
+networks:
+  ai_hr_network:
+    driver: bridge

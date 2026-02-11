@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Python
 __pycache__/
@@ -49,12 +50,15 @@ Thumbs.db
 *.pid
 *.seed
 *.pid.lock
-# Google Cloud key — не коммитить
+# Google Cloud credentials — не коммитить
 backend/majestic-camp-315514-943a8d82b2b5.json
+gcp-credentials.json
+*gcp-credentials*.json
 
-# Google Cloud key — не коммитить
-backend/majestic-camp-315514-943a8d82b2b5.json
-backend/majestic-camp-315514-943a8d82b2b5.json
+# Backups
+backups/
+*.sql
+*.sql.gz
 
-# Google Cloud key — не коммитить
-backend/majestic-camp-315514-943a8d82b2b5.json
+# Production files
+*.pid
