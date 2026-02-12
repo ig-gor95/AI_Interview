@@ -1052,6 +1052,16 @@ async def _handle_end_session(
         print(f"[SessionEnd] Error merging audio for session {session_id}: {e}")
         # Don't fail the session end due to audio merge errors
 
+    # Delete individual audio files to save disk space
+    try:
+        audio_service = AudioService()
+        deleted = await audio_service.delete_interview_audio_folder(session_id)
+        if deleted:
+            print(f"[SessionEnd] Audio folder cleaned up for session {session_id}")
+    except Exception as e:
+        print(f"[SessionEnd] Error cleaning up audio for session {session_id}: {e}")
+        # Don't fail the session end due to audio cleanup errors
+
     # Запустить генерацию оценки в фоне (не блокируем завершение сессии)
     print(f"[SessionEnd] Starting background evaluation task for session {session.id}")
     asyncio.create_task(run_evaluation_background(str(session.id)))

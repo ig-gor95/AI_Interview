@@ -81,24 +81,45 @@ class AudioService:
     async def delete_audio(self, interview_id: str, filename: Optional[str] = None) -> bool:
         """
         Delete audio file
-        
+
         Args:
             interview_id: Interview ID
             filename: Optional filename
-            
+
         Returns:
             True if deleted, False if not found
         """
         interview_dir = self.storage_path / interview_id
-        
+
         if not filename:
             filename = f"{interview_id}.mp3"
-        
+
         file_path = interview_dir / filename
-        
+
         if file_path.exists():
             file_path.unlink()
             return True
-        
+
+        return False
+
+    async def delete_interview_audio_folder(self, interview_id: str) -> bool:
+        """
+        Delete entire audio folder for an interview
+
+        Args:
+            interview_id: Interview ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        import shutil
+
+        interview_dir = self.storage_path / interview_id
+
+        if interview_dir.exists() and interview_dir.is_dir():
+            shutil.rmtree(interview_dir)
+            print(f"[AudioService] Deleted audio folder for interview {interview_id}")
+            return True
+
         return False
 
