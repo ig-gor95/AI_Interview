@@ -11,14 +11,14 @@ _ENV_FILE = _BACKEND_DIR / ".env"
 class Settings(BaseSettings):
     """Application settings"""
     
-    # Database — захардкожено под локальный Postgres
-    database_url: str = "postgresql+asyncpg://postgres:1510261105@localhost:5432/ai_hr_db"
-    postgres_user: str = "postgres"
-    postgres_password: str = "1510261105"
+    # Database — defaults для Docker, переопределяется через переменные окружения
+    database_url: str = "postgresql+asyncpg://aihr_user:changeme@postgres:5432/ai_hr_db"
+    postgres_user: str = "aihr_user"
+    postgres_password: str = "changeme"
     postgres_db: str = "ai_hr_db"
 
-    # AI Service — только DeepSeek (для локального запуска дефолт; в прод — DEEPSEEK_API_KEY в .env)
-    deepseek_api_key: str = "sk-29272cca69af437ea93d8fef2fb61d00"
+    # AI Service — только DeepSeek (переопределяется через DEEPSEEK_API_KEY в .env)
+    deepseek_api_key: str = ""
 
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
@@ -69,8 +69,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-# Всегда использовать захардкоженный postgres/1510261105 (игнорировать DATABASE_URL из .env)
-settings.database_url = "postgresql+asyncpg://postgres:1510261105@localhost:5432/ai_hr_db"
-settings.postgres_user = "postgres"
-settings.postgres_password = "1510261105"
+# Pydantic автоматически читает переменные окружения из .env и Docker
 
