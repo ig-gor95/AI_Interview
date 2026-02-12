@@ -24,35 +24,46 @@ class AudioService:
         filename: Optional[str] = None
     ) -> str:
         """
-        Save audio file to storage
-        
+        Save audio file to storage (DISABLED - audio saving is turned off)
+
         Args:
             interview_id: Interview ID
             audio_data: Audio bytes
             filename: Optional filename (default: interview_id.mp3)
-            
+
         Returns:
-            Path to saved file
+            Path to saved file (fake path, file not actually saved)
         """
-        # Validate size
-        if len(audio_data) > self.max_size_bytes:
-            raise ValueError(f"Audio file too large. Max size: {self.max_size_mb}MB")
-        
-        # Create directory for interview
-        interview_dir = self.storage_path / interview_id
-        interview_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Generate filename
+        # AUDIO SAVING DISABLED - just return a fake path
+        # This saves disk space and improves performance
+
         if not filename:
             filename = f"{interview_id}.mp3"
-        
-        file_path = interview_dir / filename
-        
-        # Save file
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(audio_data)
-        
-        return str(file_path)
+
+        # Return fake path without actually saving
+        fake_path = str(self.storage_path / interview_id / filename)
+        return fake_path
+
+        # Original code commented out:
+        # # Validate size
+        # if len(audio_data) > self.max_size_bytes:
+        #     raise ValueError(f"Audio file too large. Max size: {self.max_size_mb}MB")
+        #
+        # # Create directory for interview
+        # interview_dir = self.storage_path / interview_id
+        # interview_dir.mkdir(parents=True, exist_ok=True)
+        #
+        # # Generate filename
+        # if not filename:
+        #     filename = f"{interview_id}.mp3"
+        #
+        # file_path = interview_dir / filename
+        #
+        # # Save file
+        # async with aiofiles.open(file_path, 'wb') as f:
+        #     await f.write(audio_data)
+        #
+        # return str(file_path)
     
     async def get_audio(self, interview_id: str, filename: Optional[str] = None) -> Optional[bytes]:
         """
