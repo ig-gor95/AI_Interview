@@ -1,0 +1,96 @@
+#cloud-config
+# Cloud-init конфигурация для автоматической настройки Timeweb VPS
+# Автоматически установит Docker, настроит firewall, создаст swap
+
+# Обновление пакетов при первом запуске
+package_update: true
+package_upgrade: true
+
+# Установка необходимых пакетов
+packages:
+  - curl
+  - git
+  - wget
+  - htop
+  - nano
+  - ufw
+  - ca-certificates
+  - gnupg
+  - lsb-release
+
+# Создание swap файла (2GB)
+swap:
+  filename: /swapfile
+  size: 2147483648  # 2GB в байтах
+  maxsize: 2147483648
+
+# Запуск команд после установки пакетов
+runcmd:
+  # Настройка UFW Firewall
+  - ufw --force enable
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw reload
+
+  # Установка Docker
+  - curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+  - sh /tmp/get-docker.sh
+  - rm /tmp/get-docker.sh
+
+  # Установка Docker Compose
+  - mkdir -p /usr/local/lib/docker/cli-plugins
+  - curl -SL https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  # Создание директории для приложения
+  - mkdir -p /opt/apps
+  - chmod 755 /opt/apps
+
+  # Настройка системных лимитов для Docker
+  - echo "* soft nofile 65536" >> /etc/security/limits.conf
+  - echo "* hard nofile 65536" >> /etc/security/limits.conf
+
+  # Оптимизация sysctl для Docker
+  - echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+  - echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+  - sysctl -p
+
+  # Включение Docker при загрузке
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Создание приветственного сообщения
+  - echo "✅ Сервер готов к развертыванию AI HR Interview Platform" > /etc/motd
+  - echo "📦 Docker установлен: $(docker --version)" >> /etc/motd
+  - echo "🐙 Docker Compose установлен: $(docker-compose --version)" >> /etc/motd
+  - echo "🔥 UFW Firewall активен" >> /etc/motd
+  - echo "📁 Директория для приложения: /opt/apps" >> /etc/motd
+  - echo "" >> /etc/motd
+  - echo "Следующие шаги:" >> /etc/motd
+  - echo "1. cd /opt/apps" >> /etc/motd
+  - echo "2. git clone YOUR_REPO" >> /etc/motd
+  - echo "3. cd ai-interview" >> /etc/motd
+  - echo "4. cp .env.timeweb.example .env" >> /etc/motd
+  - echo "5. nano .env" >> /etc/motd
+  - echo "6. ./deploy-timeweb.sh" >> /etc/motd
+  - echo "" >> /etc/motd
+
+# Автоматическая очистка
+apt:
+  preserve_sources_list: false
+
+# Финальное сообщение
+final_message: |
+  ========================================
+  ✅ Cloud-init завершен успешно!
+  ========================================
+
+  Сервер готов к использованию.
+  Docker и все необходимые инструменты установлены.
+
+  Подключитесь к серверу:
+  ssh root@YOUR_SERVER_IP
+
+  Время настройки: $UPTIME секунд
+  ========================================
