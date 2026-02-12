@@ -13,10 +13,10 @@ openai_service = AIService()
 
 # Initialize Google Cloud TTS service
 google_cloud_tts_service = None
-if settings.google_cloud_credentials_path or settings.tts_service == "google":
+if settings.google_application_credentials or settings.tts_service == "google":
     try:
         google_cloud_tts_service = GoogleCloudTTSService(
-            credentials_path=settings.google_cloud_credentials_path,
+            credentials_path=settings.google_application_credentials,
             voice_name=settings.google_cloud_voice_name,
             language_code=settings.google_cloud_voice_language,
             speaking_rate=settings.google_cloud_speaking_rate,

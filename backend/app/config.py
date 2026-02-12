@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
-    google_cloud_credentials_path: str = "majestic-camp-315514-943a8d82b2b5.json"  # Path to service account JSON file
+    google_application_credentials: str = "/app/gcp-credentials.json"  # Path to service account JSON file in Docker
     google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Orus"  # Leda (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
     google_cloud_voice_language: str = "ru-RU"
     google_cloud_speaking_rate: float = 1.0  # Скорость речи (0.25-4.0), можно переопределить через GOOGLE_CLOUD_SPEAKING_RATE в .env

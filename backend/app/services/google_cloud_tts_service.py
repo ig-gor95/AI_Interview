@@ -52,10 +52,15 @@ class GoogleCloudTTSService:
         if credentials_path:
             os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_path
         elif 'GOOGLE_APPLICATION_CREDENTIALS' not in os.environ:
-            # Try to find credentials in current directory
-            default_path = os.path.join(os.getcwd(), 'majestic-camp-315514-943a8d82b2b5.json')
-            if os.path.exists(default_path):
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = default_path
+            # Try to find credentials in common locations
+            possible_paths = [
+                '/app/gcp-credentials.json',  # Docker
+                'gcp-credentials.json',  # Current directory
+            ]
+            for default_path in possible_paths:
+                if os.path.exists(default_path):
+                    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = default_path
+                    break
 
         try:
             self.client = texttospeech.TextToSpeechClient()

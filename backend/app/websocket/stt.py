@@ -14,7 +14,7 @@ async def handle_stt_websocket(websocket: WebSocket, session_id: str) -> None:
     """
     print(f"{_STT_LOG_PREFIX} session_id={session_id} connect")
     await websocket.accept()
-    stt = create_streaming_stt(getattr(settings, "google_cloud_credentials_path", None))
+    stt = create_streaming_stt(getattr(settings, "google_application_credentials", None))
     if not stt:
         print(f"{_STT_LOG_PREFIX} session_id={session_id} Speech-to-Text not available (google-cloud-speech or credentials)")
         await websocket.send_json({"type": "error", "message": "Speech-to-Text not available"})
