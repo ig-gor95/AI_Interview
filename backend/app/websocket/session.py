@@ -40,11 +40,12 @@ from app.core import openai_service
 
 class SessionWebSocketManager:
     """Manages WebSocket connections for interview sessions"""
-    
+
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.session_states: Dict[str, Dict[str, Any]] = {}
         self.receive_locks: Dict[str, asyncio.Lock] = {}  # Lock per session to prevent concurrent receive calls
+        self.background_tasks: set = set()  # Keep references to background tasks to prevent garbage collection
     
     async def connect(self, websocket: WebSocket, session_id: str):
         """Accept WebSocket connection"""
@@ -1073,8 +1074,24 @@ async def _handle_end_session(
         # Don't fail the session end due to audio cleanup errors
 
     # Запустить генерацию оценки в фоне (не блокируем завершение сессии)
+    # CRITICAL: Keep strong reference to task to prevent garbage collection
     print(f"[SessionEnd] Starting background evaluation task for session {session.id}")
-    asyncio.create_task(run_evaluation_background(str(session.id)))
+    task = asyncio.create_task(run_evaluation_background(str(session.id)))
+
+    # Add task to set and remove it when done
+    ws_manager.background_tasks.add(task)
+    task.add_done_callback(lambda t: ws_manager.background_tasks.discard(t))
+
+    # Also log any exceptions from the task
+    def handle_task_result(t):
+        try:
+            t.result()  # This will raise if the task failed
+        except Exception as e:
+            print(f"[SessionEnd] Background evaluation task failed for session {session.id}: {e}")
+            import traceback
+            traceback.print_exc()
+
+    task.add_done_callback(handle_task_result)
 
     await ws_manager.send_message(session_id, {
         "type": "ended",
