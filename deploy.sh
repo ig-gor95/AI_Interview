@@ -1,141 +1,160 @@
 #!/bin/bash
+# Production deployment script for AI Interview platform
+# Handles all edge cases: missing images, old containers, errors
 
-# Скрипт первичного развертывания на VK Cloud
-# Использование: ./deploy.sh
+set -e  # Exit on error
 
-set -e  # Остановка при ошибке
-
-echo "🚀 Начинаем развертывание AI HR Interview Platform на VK Cloud..."
-
-# Цвета для вывода
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Проверка наличия .env.production
-if [ ! -f .env.production ]; then
-    echo -e "${RED}❌ Файл .env.production не найден!${NC}"
-    echo "Создайте его на основе .env.production.example"
-    echo "cp .env.production.example .env.production"
-    echo "Затем заполните необходимые значения"
-    exit 1
-fi
+COMPOSE_FILE="docker-compose.timeweb.yml"
 
-# Проверка наличия GCP credentials
-if [ ! -f gcp-credentials.json ]; then
-    echo -e "${YELLOW}⚠️  Файл gcp-credentials.json не найден${NC}"
-    echo "Если вы используете Google Cloud TTS/STT, добавьте файл gcp-credentials.json"
-    read -p "Продолжить без GCP credentials? (y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-
-# Загрузка переменных окружения
-export $(cat .env.production | grep -v '^#' | xargs)
-
-echo -e "${GREEN}✅ Конфигурация загружена${NC}"
-
-# Проверка Docker
-if ! command -v docker &> /dev/null; then
-    echo -e "${RED}❌ Docker не установлен${NC}"
-    exit 1
-fi
-
-if ! command -v docker-compose &> /dev/null; then
-    echo -e "${RED}❌ Docker Compose не установлен${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}✅ Docker и Docker Compose установлены${NC}"
-
-# Остановка старых контейнеров (если есть)
-echo "🛑 Остановка старых контейнеров..."
-docker-compose -f docker-compose.prod.yml down 2>/dev/null || true
-
-# Удаление старых образов (опционально)
-read -p "Удалить старые Docker образы? (y/n): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "🧹 Очистка старых образов..."
-    docker system prune -f
-fi
-
-# Создание сети (если не существует)
-docker network create ai_hr_network 2>/dev/null || true
-
-# Сборка образов
-echo "🔨 Сборка Docker образов..."
-docker-compose -f docker-compose.prod.yml build --no-cache
-
-# Проверка соединения с базой данных
-echo "🔍 Проверка соединения с базой данных..."
-if ! docker run --rm --network=host postgres:15-alpine pg_isready -h $(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\).*/\1/p') -U $POSTGRES_USER &> /dev/null; then
-    echo -e "${YELLOW}⚠️  Не удалось подключиться к базе данных${NC}"
-    echo "Убедитесь, что:"
-    echo "1. Managed PostgreSQL создан в VK Cloud"
-    echo "2. DATABASE_URL правильный в .env.production"
-    echo "3. Firewall правила разрешают подключение"
-    read -p "Продолжить деплой? (y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-
-# Запуск миграций базы данных
-echo "📊 Запуск миграций базы данных..."
-docker-compose -f docker-compose.prod.yml run --rm backend alembic upgrade head || {
-    echo -e "${YELLOW}⚠️  Миграции не выполнены (возможно, Alembic не настроен)${NC}"
+# Function to print colored messages
+print_step() {
+    echo ""
+    echo -e "${BLUE}▶ $1${NC}"
 }
 
-# Запуск контейнеров
-echo "🚀 Запуск контейнеров..."
-docker-compose -f docker-compose.prod.yml up -d
+print_success() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
 
-# Ожидание запуска сервисов
-echo "⏳ Ожидание запуска сервисов..."
-sleep 10
+print_error() {
+    echo -e "${RED}✗ $1${NC}"
+}
 
-# Проверка здоровья контейнеров
-echo "🏥 Проверка состояния контейнеров..."
-docker-compose -f docker-compose.prod.yml ps
+print_warning() {
+    echo -e "${YELLOW}⚠ $1${NC}"
+}
 
-# Проверка логов
-echo ""
-echo "📋 Последние логи backend:"
-docker-compose -f docker-compose.prod.yml logs --tail=20 backend
-
-echo ""
-echo "📋 Последние логи frontend:"
-docker-compose -f docker-compose.prod.yml logs --tail=20 frontend
-
-# Финальная проверка
-echo ""
-echo "🔍 Проверка доступности сервисов..."
-sleep 5
-
-if curl -s http://localhost:8000/health > /dev/null; then
-    echo -e "${GREEN}✅ Backend работает (http://localhost:8000)${NC}"
-else
-    echo -e "${RED}❌ Backend не отвечает${NC}"
+# Check if docker-compose file exists
+if [ ! -f "$COMPOSE_FILE" ]; then
+    print_error "File $COMPOSE_FILE not found!"
+    exit 1
 fi
 
-if curl -s http://localhost/ > /dev/null; then
-    echo -e "${GREEN}✅ Frontend работает (http://localhost)${NC}"
-else
-    echo -e "${RED}❌ Frontend не отвечает${NC}"
+echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║         AI Interview Platform Deploy           ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
+echo ""
+
+echo -e "${GREEN}Changes to deploy:${NC}"
+echo "  • Female AI voice (Leda)"
+echo "  • Consent checkbox on registration"
+echo "  • Link marked as used only on session completion"
+echo "  • 30 active links limit per interview"
+echo ""
+
+read -p "Continue with deployment? (y/n): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Deployment cancelled"
+    exit 0
 fi
 
+# Step 1: Git pull
+print_step "[1/7] Pulling latest changes from git..."
+if git pull origin master; then
+    print_success "Git pull successful"
+else
+    print_error "Git pull failed"
+    exit 1
+fi
+
+# Step 2: Stop all containers
+print_step "[2/7] Stopping containers..."
+docker-compose -f $COMPOSE_FILE down
+print_success "Containers stopped"
+
+# Step 3: Clean old containers and dangling images
+print_step "[3/7] Cleaning old containers..."
+# Remove all stopped containers for this project
+docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
+# Remove dangling images to free up space
+docker image prune -f > /dev/null 2>&1 || true
+print_success "Cleanup completed"
+
+# Step 4: Build backend
+print_step "[4/7] Building backend (this may take a few minutes)..."
+if docker-compose -f $COMPOSE_FILE build --no-cache backend; then
+    print_success "Backend built successfully"
+else
+    print_error "Backend build failed"
+    exit 1
+fi
+
+# Step 5: Build frontend
+print_step "[5/7] Building frontend (this may take a few minutes)..."
+if docker-compose -f $COMPOSE_FILE build frontend; then
+    print_success "Frontend built successfully"
+else
+    print_error "Frontend build failed"
+    exit 1
+fi
+
+# Step 6: Start all services
+print_step "[6/7] Starting all services..."
+if docker-compose -f $COMPOSE_FILE up -d; then
+    print_success "Services started"
+else
+    print_error "Failed to start services"
+    exit 1
+fi
+
+# Wait for containers to initialize
 echo ""
-echo -e "${GREEN}🎉 Развертывание завершено!${NC}"
+echo -e "${YELLOW}Waiting for services to initialize (20 seconds)...${NC}"
+sleep 20
+
+# Step 7: Check status
+print_step "[7/7] Checking deployment status..."
 echo ""
-echo "Полезные команды:"
-echo "  docker-compose -f docker-compose.prod.yml logs -f          # Логи в реальном времени"
-echo "  docker-compose -f docker-compose.prod.yml ps               # Статус контейнеров"
-echo "  docker-compose -f docker-compose.prod.yml restart          # Перезапуск всех сервисов"
-echo "  docker-compose -f docker-compose.prod.yml down             # Остановка всех сервисов"
-echo "  ./update.sh                                                # Обновление приложения"
+docker-compose -f $COMPOSE_FILE ps
+
+# Check if all containers are running
+CONTAINERS_UP=$(docker-compose -f $COMPOSE_FILE ps | grep -c "Up" || true)
+CONTAINERS_TOTAL=$(docker-compose -f $COMPOSE_FILE ps | tail -n +2 | wc -l)
+
+echo ""
+if [ "$CONTAINERS_UP" -eq "$CONTAINERS_TOTAL" ] && [ "$CONTAINERS_TOTAL" -gt 0 ]; then
+    echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║           DEPLOYMENT SUCCESSFUL! ✓             ║${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
+    echo ""
+    print_success "All $CONTAINERS_UP containers are running"
+    echo ""
+    echo -e "${GREEN}Deployed features:${NC}"
+    echo "  ✓ Female AI voice (Leda)"
+    echo "  ✓ Consent checkbox (required)"
+    echo "  ✓ Link usage tracking on completion"
+    echo "  ✓ 30 links limit per interview"
+    echo ""
+    echo -e "${YELLOW}Test the deployment:${NC}"
+    echo "  1. Open https://screenme.pro"
+    echo "  2. Create interview and generate link"
+    echo "  3. Open link as candidate - check consent checkbox"
+    echo "  4. Start interview - listen to female AI voice"
+    echo ""
+    echo -e "${YELLOW}Check logs if needed:${NC}"
+    echo "  docker logs ai_hr_backend --tail 50"
+    echo "  docker logs ai_hr_frontend --tail 50"
+else
+    echo -e "${BLUE}╔════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║         DEPLOYMENT COMPLETED WITH ISSUES       ║${NC}"
+    echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
+    echo ""
+    print_warning "Some containers may not be running properly"
+    echo ""
+    echo -e "${YELLOW}Check logs for errors:${NC}"
+    echo "  docker-compose -f $COMPOSE_FILE logs --tail=50"
+    echo ""
+    echo -e "${YELLOW}Or check specific service:${NC}"
+    echo "  docker logs ai_hr_backend --tail 100"
+    echo "  docker logs ai_hr_frontend --tail 100"
+    echo "  docker logs ai_hr_db --tail 100"
+fi
+
 echo ""

@@ -535,7 +535,7 @@ export function InterviewSessionView() {
       case 'ended':
         // Session ended
         stopTimer();
-        navigate(`/interview/${token}`);
+        navigate(`/interview/thank-you`);
         break;
       
       case 'error':
@@ -1097,17 +1097,12 @@ export function InterviewSessionView() {
         setSttMethod(null);
         lastSpeechActivityRef.current = null;
       } else {
-        // Browser auto-ended recognition (pause, no-speech, etc.) — restart to keep mic active
-        console.log('[Frontend] Browser auto-ended recognition, restarting...');
-        setTimeout(() => {
-          if (!userRequestedStopRef.current && !isProcessing) {
-            startSpeechRecognition(false); // false = keep existing text (resume)
-          } else {
-            setIsListening(false);
-            setSttMethod(null);
-            lastSpeechActivityRef.current = null;
-          }
-        }, 100);
+        // Browser auto-ended recognition (pause, no-speech, etc.)
+        // Do NOT restart automatically - user must click mic button to start again
+        console.log('[Frontend] Browser auto-ended recognition, staying stopped (no auto-restart)');
+        setIsListening(false);
+        setSttMethod(null);
+        lastSpeechActivityRef.current = null;
       }
     };
 
@@ -1152,7 +1147,7 @@ export function InterviewSessionView() {
       wsRef.current.send(JSON.stringify({ type: 'end' }));
     }
     stopTimer();
-    navigate(`/interview/${token}`);
+    navigate(`/interview/thank-you`);
   };
 
   // Cleanup on unmount

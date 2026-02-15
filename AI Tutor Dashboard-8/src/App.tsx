@@ -15,6 +15,7 @@ import { CandidateEvaluationWrapper } from './components/CandidateEvaluationWrap
 import { EvaluationDemo } from './components/EvaluationDemo';
 import { CandidateRegistration } from './components/CandidateRegistration';
 import { InterviewCandidatesPage } from './components/InterviewCandidatesPage';
+import { ThankYouPage } from './components/ThankYouPage';
 import { JotaiProvider } from './components/JotaiProvider';
 
 // User context wrapper
@@ -342,13 +343,14 @@ function AppContent() {
         <Route path="/evaluation-demo" element={<EvaluationDemoPage />} />
         <Route path="/interview/:token" element={<InterviewRegistrationPage />} />
         <Route path="/interview/:token/session" element={<InterviewSessionPage />} />
-        <Route 
-          path="/interview/:interviewId/candidates" 
+        <Route path="/interview/thank-you" element={<ThankYouPage />} />
+        <Route
+          path="/interview/:interviewId/candidates"
           element={
             <ProtectedRoute>
               <InterviewCandidatesPage />
             </ProtectedRoute>
-          } 
+          }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
