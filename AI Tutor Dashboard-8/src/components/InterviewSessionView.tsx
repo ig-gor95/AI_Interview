@@ -98,10 +98,10 @@ export function InterviewSessionView() {
   const FILLER_PHRASE_COUNT = 5;
   const FILLER_DELAY_MS = 3500;
 
-  // Helper functions to sync state and ref
+  // Helper function to sync state and ref
   const setListeningState = (value: boolean) => {
     isListeningRef.current = value;
-    setListeningState(value);
+    setIsListening(value);
   };
 
   const stopFillerAudio = () => {
