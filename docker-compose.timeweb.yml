@@ -37,6 +37,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: ai_hr_backend
+    stop_grace_period: 15s  # Give time for WebSocket connections to close
     environment:
       # Database
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-aihr_user}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_hr_db}
@@ -107,6 +108,7 @@ services:
       context: ./AI Tutor Dashboard-8
       dockerfile: Dockerfile
     container_name: ai_hr_frontend
+    stop_grace_period: 10s  # Give nginx time to finish requests
     ports:
       - "80:80"
       - "443:443"

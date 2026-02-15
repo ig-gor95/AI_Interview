@@ -67,17 +67,19 @@ else
     exit 1
 fi
 
-# Step 2: Force stop all containers (docker-compose down hangs)
-print_step "[2/7] Force stopping containers..."
+# Step 2: Stop all containers gracefully (now with proper signal handling)
+print_step "[2/7] Stopping containers..."
 set +e  # Don't exit on error during cleanup
-# Stop with short timeout
-docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker stop -t 3 2>/dev/null || true
-# Kill if still running
-docker ps | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
-# Remove stopped containers
-docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
+# Try graceful shutdown with docker-compose down (timeout 20s)
+timeout 20 docker-compose -f $COMPOSE_FILE down 2>/dev/null
+if [ $? -ne 0 ]; then
+    print_warning "Graceful shutdown timed out, forcing stop..."
+    # Force stop if graceful shutdown failed
+    docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker stop -t 5 2>/dev/null || true
+    docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
+fi
 set -e  # Re-enable exit on error
-print_success "Containers stopped and removed"
+print_success "Containers stopped"
 
 # Step 3: Clean dangling images and networks
 print_step "[3/7] Cleaning up..."
