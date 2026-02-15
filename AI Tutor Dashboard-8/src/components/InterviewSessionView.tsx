@@ -542,7 +542,7 @@ export function InterviewSessionView() {
       case 'ended':
         // Session ended
         stopTimer();
-        navigate(`/interview/thank-you`);
+        navigate(`/interview/${token}/results`);
         break;
       
       case 'error':
@@ -736,6 +736,43 @@ export function InterviewSessionView() {
     stopTimer();
     // Filler audio disabled per user request
     // startFillerTimer();
+  };
+
+  // Toggle mute (instant microphone disable)
+  const toggleMute = () => {
+    const newMutedState = !isMuted;
+
+    // If turning mute ON while recording - stop recording immediately
+    if (newMutedState && isListeningRef.current) {
+      console.log('[Frontend] Muting - stopping active recording');
+      userRequestedStopRef.current = true;
+
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      if (speechPauseTimeoutRef.current) {
+        clearTimeout(speechPauseTimeoutRef.current);
+        speechPauseTimeoutRef.current = null;
+      }
+
+      if (useBackendSttRef.current) {
+        stopBackendStt(false); // Stop but don't send
+      } else {
+        try {
+          recognition.stop();
+        } catch (e) {
+          console.log('[Frontend] Recognition already stopped:', e);
+        }
+      }
+
+      updateListeningState(false);
+      setSttMethod(null);
+      lastSpeechActivityRef.current = null;
+    }
+
+    setIsMuted(newMutedState);
+    console.log('[Frontend] Microphone muted:', newMutedState);
   };
 
   // Toggle listening (microphone) - using Web Speech API
@@ -1566,12 +1603,13 @@ export function InterviewSessionView() {
           <div className="flex items-center gap-1.5 sm:gap-3">
             <div className="flex flex-col items-center gap-1">
               <button
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={toggleMute}
                 className={`px-2 sm:px-4 py-2 sm:py-3 rounded-xl transition-all ${
                   isMuted
                     ? 'bg-red-600 hover:bg-red-700 text-white'
                     : 'bg-gray-700/50 hover:bg-gray-700 text-white'
                 }`}
+                title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
               >
                 {isMuted ? <MicOff className="w-4 h-4 sm:w-5 sm:h-5" /> : <Mic className="w-4 h-4 sm:w-5 sm:h-5" />}
               </button>

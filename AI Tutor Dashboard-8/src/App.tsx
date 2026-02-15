@@ -343,7 +343,7 @@ function AppContent() {
         <Route path="/evaluation-demo" element={<EvaluationDemoPage />} />
         <Route path="/interview/:token" element={<InterviewRegistrationPage />} />
         <Route path="/interview/:token/session" element={<InterviewSessionPage />} />
-        <Route path="/interview/thank-you" element={<ThankYouPage />} />
+        <Route path="/interview/:token/results" element={<ThankYouPage />} />
         <Route
           path="/interview/:interviewId/candidates"
           element={

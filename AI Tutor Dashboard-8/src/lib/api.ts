@@ -342,5 +342,49 @@ export const publicAPI = {
       method: 'POST',
     });
   },
+
+  async getSessionResults(token: string) {
+    return publicApiRequest<{
+      candidateName: string;
+      role: string;
+      company: string | null;
+      transcript: Array<{
+        timestamp: string;
+        speaker: 'AI' | 'Candidate';
+        text: string;
+      }>;
+      evaluation: {
+        overallScore: number;
+        verdict: 'recommended' | 'possible' | 'not_recommended';
+        recommendation: string;
+        requirementChecks: Array<{
+          requirement: string;
+          fact: string;
+          status: 'met' | 'not_met' | 'partial' | 'loading';
+        }>;
+        criteria: Array<{
+          name: string;
+          score: number;
+          maxScore: number;
+          notes: string[];
+          specificFacts: string[];
+        }>;
+      } | null;
+      simulation: {
+        situation: string;
+        dialog: Array<{
+          role: 'ai' | 'candidate';
+          tone?: 'aggressive' | 'calm' | 'neutral';
+          message: string;
+        }>;
+        summary: Array<{
+          type: 'positive' | 'warning' | 'negative';
+          text: string;
+        }>;
+      } | null;
+      isEvaluating: boolean;
+      isLoadingTranscript: boolean;
+    }>(`/interview/${token}/results`);
+  },
 };
 
