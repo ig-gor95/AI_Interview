@@ -90,7 +90,7 @@ export function InterviewSessionView() {
   const sttMediaStreamRef = useRef<MediaStream | null>(null);
   const sttInt16BufferRef = useRef<number[]>([]);
   const handleWebSocketMessageRef = useRef<((data: any) => void) | null>(null);
-  const STT_CHUNK_BYTES = 1600; // 50 ms at 16kHz mono 16-bit (faster streaming for Google Cloud)
+  const STT_CHUNK_BYTES = 640; // 20 ms at 16kHz mono 16-bit (very fast streaming for Google Cloud)
 
   const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
 
@@ -894,10 +894,12 @@ export function InterviewSessionView() {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
         sttAudioContextRef.current = ctx;
         const source = ctx.createMediaStreamSource(stream);
-        const bufferSize = 2048; // Smaller buffer for faster real-time streaming
+        const bufferSize = 1024; // Very small buffer for ultra-fast real-time streaming
         const scriptNode = ctx.createScriptProcessor(bufferSize, 1, 1);
         sttScriptNodeRef.current = scriptNode;
         sttInt16BufferRef.current = [];
+        let sttChunksSent = 0;
+        let sttStartTime = Date.now();
 
         scriptNode.onaudioprocess = (e: AudioProcessingEvent) => {
           if (!sttWsRef.current || sttWsRef.current.readyState !== WebSocket.OPEN) return;
@@ -917,10 +919,17 @@ export function InterviewSessionView() {
           }
           // Send chunks as they accumulate - don't wait for exact chunk size
           // This ensures continuous real-time audio stream for Google Cloud Speech
-          if (sttInt16BufferRef.current.length >= STT_CHUNK_BYTES) {
+          while (sttInt16BufferRef.current.length >= STT_CHUNK_BYTES) {
             const chunk = new Uint8Array(sttInt16BufferRef.current.splice(0, STT_CHUNK_BYTES));
             try {
               sttWsRef.current?.send(chunk.buffer);
+              sttChunksSent++;
+              // Log frequency every 25 chunks (every ~0.5 seconds)
+              if (sttChunksSent % 25 === 0) {
+                const elapsed = (Date.now() - sttStartTime) / 1000;
+                const frequency = sttChunksSent / elapsed;
+                console.log(`[Frontend] STT: sent ${sttChunksSent} chunks in ${elapsed.toFixed(1)}s (${frequency.toFixed(1)} chunks/sec, ~${(1000/frequency).toFixed(0)}ms between chunks)`);
+              }
             } catch (_) {}
           }
         };
