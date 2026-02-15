@@ -50,28 +50,11 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center gap-6">
-              <nav className="hidden md:flex items-center gap-6">
-                <a href="#mass" className="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
-                  Массовый найм
-                </a>
-                <a href="#it" className="text-sm font-medium text-gray-700 hover:text-purple-600 transition-colors">
-                  IT-аудит
-                </a>
-                <a href="#pricing" className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors">
-                  Цены
-                </a>
-                <button
-                  onClick={() => onNavigate('evaluation-demo')}
-                  className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-                >
-                  Демо
-                </button>
-              </nav>
+            <div className="flex items-center gap-3">
               <LanguageSwitcher variant="light" size="sm" />
               <button
                 onClick={() => onNavigate('login-student')}
-                className="hidden sm:block px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 {t.nav.forCandidates}
               </button>
@@ -105,34 +88,30 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
                 <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  ScreenMe: Профессиональная оценка кандидатов
+                  {t.hero.title}
                 </span>
               </h1>
 
               <p className="text-lg sm:text-xl text-gray-600 mb-10 leading-relaxed">
-                От массового ИИ-скрининга до глубокого технического аудита от Senior-экспертов
+                {t.hero.subtitle}
               </p>
 
-              <div className="grid sm:grid-cols-2 gap-4 mb-12">
+              <div className="flex flex-col sm:flex-row gap-4 mb-12">
                 <button
-                  onClick={() => onNavigateWithTab ? onNavigateWithTab('evaluation-demo', 'mass') : onNavigate('login-organizer')}
-                  className="px-6 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-300 font-semibold flex flex-col items-center justify-center gap-2 text-center"
+                  onClick={() => setShowITRequestModal(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300 font-semibold flex items-center justify-center gap-2"
                 >
-                  <Users className="w-6 h-6" />
-                  <div>
-                    <div className="text-base font-bold">Для массового найма</div>
-                    <div className="text-sm font-normal opacity-90">от 99 ₽</div>
-                  </div>
+                  <Target className="w-5 h-5" />
+                  {t.hero.ctaPrimary}
+                  <ArrowRight className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => onNavigateWithTab ? onNavigateWithTab('evaluation-demo', 'it') : setShowITRequestModal(true)}
-                  className="px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:shadow-lg hover:shadow-purple-500/30 transition-all duration-300 font-semibold flex flex-col items-center justify-center gap-2 text-center"
+                  onClick={() => onNavigate('login-organizer')}
+                  className="px-6 py-3 border-2 border-gray-400 text-gray-700 rounded-xl hover:border-gray-500 hover:bg-gray-50 transition-all duration-300 font-medium flex items-center justify-center gap-2"
                 >
-                  <Target className="w-6 h-6" />
-                  <div>
-                    <div className="text-base font-bold">Для IT-команд</div>
-                    <div className="text-sm font-normal opacity-90">Tech Audit</div>
-                  </div>
+                  <Users className="w-5 h-5" />
+                  {t.hero.ctaSecondary}
+                  <ArrowRight className="w-5 h-5" />
                 </button>
               </div>
 
@@ -330,7 +309,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
 
       {/* Choice Section: Mass vs IT */}
       {onNavigateWithTab && (
-        <section id="mass" className="py-16 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-100">
+        <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white border-t border-gray-100">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-50 rounded-full mb-4 border border-purple-100">
@@ -338,60 +317,43 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
               </div>
               <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">{t.choice.title}</h2>
             </div>
-            <div className="grid md:grid-cols-2 gap-6 max-w-5xl mx-auto">
-              {/* Mass Card - Light, Fast, Affordable */}
+            <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
               <div className="bg-blue-50/50 border-2 border-blue-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-center gap-2 mb-3">
                   <Users className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm text-blue-700 font-bold">МАССОВЫЙ НАЙМ</span>
+                  <span className="text-xs text-blue-700 font-bold">{t.choice.massCard.title}</span>
                 </div>
-                <p className="text-sm text-gray-600 mb-4">Акцент на ИИ Софии, 24/7, скорость</p>
+                <p className="text-sm text-gray-600 mb-4">{t.choice.massCard.subtitle}</p>
                 <ul className="space-y-2 text-sm mb-4">
-                  <li className="text-gray-700">✓ AI-интервьюер София работает 24/7</li>
-                  <li className="text-gray-700">✓ Автоматический отбор за минуты</li>
-                  <li className="text-gray-700">✓ Симуляция рабочих ситуаций</li>
+                  <li className="text-gray-700">• {t.choice.massCard.feature1}</li>
+                  <li className="text-gray-700">• {t.choice.massCard.feature2}</li>
+                  <li className="text-gray-700">• {t.choice.massCard.feature3}</li>
                 </ul>
-                <div className="text-3xl font-bold text-blue-600 mb-4">99 ₽</div>
+                <div className="text-2xl font-bold text-gray-900 mb-4">{t.choice.massCard.price}</div>
                 <button
                   onClick={() => onNavigateWithTab('evaluation-demo', 'mass')}
-                  className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                  className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
                 >
-                  Попробовать
+                  {t.choice.massCard.button}
                 </button>
               </div>
-
-              {/* IT Card - Premium, Expert, Deep */}
-              <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-300 rounded-2xl p-6 hover:shadow-xl transition-all relative overflow-hidden">
-                <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-bl-lg">
-                  PREMIUM
-                </div>
-                <div className="flex items-center gap-2 mb-3 mt-2">
+              <div className="bg-purple-50/50 border-2 border-purple-200 rounded-2xl p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-center gap-2 mb-3">
                   <Target className="w-5 h-5 text-purple-600" />
-                  <span className="text-sm text-purple-700 font-bold">IT-АУДИТ</span>
+                  <span className="text-xs text-purple-700 font-bold">{t.choice.itCard.title}</span>
                 </div>
-                <p className="text-base font-semibold text-gray-900 mb-4">«Внешний технический отдел»</p>
-
-                {/* Tech Logos */}
-                <div className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-purple-200">
-                  <div className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded">React</div>
-                  <div className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded">Python</div>
-                  <div className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs font-semibold rounded">Go</div>
-                  <div className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded">Java</div>
-                  <div className="px-2 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded">Node.js</div>
-                  <div className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded">C++</div>
-                </div>
-
+                <p className="text-sm text-gray-600 mb-4">{t.choice.itCard.subtitle}</p>
                 <ul className="space-y-2 text-sm mb-4">
-                  <li className="text-gray-700">★ Senior-интервьюеры из BigTech (Yandex, FAANG)</li>
-                  <li className="text-gray-700">★ Глубокий Live-coding и System Design</li>
-                  <li className="text-gray-700">★ Детальный Scorecard (60+ параметров)</li>
+                  <li className="text-gray-700">• {t.choice.itCard.feature1}</li>
+                  <li className="text-gray-700">• {t.choice.itCard.feature2}</li>
+                  <li className="text-gray-700">• {t.choice.itCard.feature3}</li>
                 </ul>
-                <div className="text-base font-semibold text-purple-700 mb-4">Экономит до 40 часов техлида в месяц</div>
+                <div className="text-xl font-bold text-gray-900 mb-4">{t.choice.itCard.price}</div>
                 <button
                   onClick={() => onNavigateWithTab('evaluation-demo', 'it')}
-                  className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-purple-500/30 transition-all"
+                  className="w-full py-2.5 bg-purple-600 text-white rounded-xl font-medium hover:bg-purple-700 transition-colors"
                 >
-                  Узнать подробнее
+                  {t.choice.itCard.button}
                 </button>
               </div>
             </div>
@@ -429,11 +391,10 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       <span className="text-xs text-blue-700 font-semibold">ШАГ 1</span>
                     </div>
                     <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
-                      Постановка задачи
+                      Настройте интервью под вашу компанию
                     </h3>
                     <p className="text-base sm:text-lg text-gray-600 mb-6">
-                      <strong>Для Mass:</strong> Выбираете готовый сценарий ИИ.<br />
-                      <strong>Для IT:</strong> Передаете нам вакансию — мы сами готовим вопросы и подбираем эксперта.
+                      Создайте список вопросов о навыках и опыте. Добавьте симуляцию реальной ситуации — опишите, какого клиента должен имитировать AI и в каком сценарии.
                     </p>
                     <div className="inline-flex items-center gap-2 text-sm text-gray-500">
                       <Clock className="w-4 h-4" />
@@ -500,10 +461,10 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       <span className="text-xs text-purple-700 font-semibold">ШАГ 2</span>
                     </div>
                     <h3 className="text-3xl font-bold text-gray-900 mb-4">
-                      Фильтрация через AI
+                      Поделитесь ссылкой на интервью
                     </h3>
                     <p className="text-lg text-gray-600 mb-6">
-                      Кандидат проходит голосовое ИИ-интервью. Вы отсеиваете тех, кто не подходит под базовые критерии (Hard & Soft).
+                      Получите уникальную ссылку сразу после создания. Кандидаты смогут пройти интервью в любое удобное время, без участия HR.
                     </p>
                     <div className="inline-flex items-center gap-2 text-sm text-gray-500">
                       <Zap className="w-4 h-4" />
@@ -521,10 +482,10 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       <span className="text-xs text-pink-700 font-semibold">ШАГ 3</span>
                     </div>
                     <h3 className="text-3xl font-bold text-gray-900 mb-4">
-                      Экспертная оценка (только для IT)
+                      AI проводит интервью с кандидатами
                     </h3>
                     <p className="text-lg text-gray-600 mb-6">
-                      Лучшие кандидаты попадают на встречу с нашим Senior-инженером. Глубокое техническое интервью с live-coding и system design.
+                      AI-интервьюер София встречает кандидата в формате конференции. Ведёт live диалог голосом, задаёт вопросы, имитирует реальные рабочие ситуации с клиентами и оценивает ответы на основе заданных критериев.
                     </p>
                     <div className="inline-flex items-center gap-2 text-sm text-gray-500">
                       <Video className="w-4 h-4" />
@@ -601,10 +562,10 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       <span className="text-xs text-green-700 font-semibold">ШАГ 4</span>
                     </div>
                     <h3 className="text-3xl font-bold text-gray-900 mb-4">
-                      Решение о найме
+                      Получите отсортированных кандидатов
                     </h3>
                     <p className="text-lg text-gray-600 mb-6">
-                      Вы получаете финальный рейтинг и готовое досье. Смотрите список кандидатов, отсортированных по критериям, с полной аналитикой и записями интервью.
+                      Смотрите список кандидатов, отсортированных по критериям. Читайте описательную аналитику, слушайте запись интервью или читайте текстовый транскрипт.
                     </p>
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm text-gray-700">
@@ -678,7 +639,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
       </section>
 
       {/* Evaluation Preview Section */}
-      <section id="it" className="py-20 px-6 lg:px-8 bg-white relative overflow-hidden">
+      <section className="py-20 px-6 lg:px-8 bg-white relative overflow-hidden">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Left: Text Content */}
@@ -689,110 +650,46 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
               </div>
 
               <h2 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6 leading-tight">
-                Два типа отчетов
+                Экран оценки кандидата
                 <br />
                 <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  для разных задач
+                  без психотипов
                 </span>
               </h2>
 
-              {/* Tabs */}
-              <div className="flex gap-2 mb-6 border-b border-gray-200 pb-2">
-                <button
-                  onClick={() => setEvaluationTab('mass')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    evaluationTab === 'mass'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Отчет ИИ
-                </button>
-                <button
-                  onClick={() => setEvaluationTab('it')}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    evaluationTab === 'it'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  Технический отчет
-                </button>
+              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+                Понятная оценка с конкретными примерами из диалога. Сильные стороны, зоны внимания и рекомендации к действию — вся информация для быстрого принятия решения о найме.
+              </p>
+
+              <div className="space-y-4 mb-8">
+                {[
+                  {
+                    icon: <CheckCircle className="w-5 h-5" />,
+                    title: 'Готовность к работе',
+                    description: 'Краткое резюме поведения в стандартных и сложных ситуациях'
+                  },
+                  {
+                    icon: <MessageSquare className="w-5 h-5" />,
+                    title: 'Ключевые наблюдения',
+                    description: 'Описательные формулировки без оценочных суждений'
+                  },
+                  {
+                    icon: <Video className="w-5 h-5" />,
+                    title: 'Запись и текст',
+                    description: 'Прослушайте запись или прочитайте полный диалог'
+                  }
+                ].map((feature, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0 text-purple-600">
+                      {feature.icon}
+                    </div>
+                    <div>
+                      <h3 className="text-gray-900 font-medium mb-1">{feature.title}</h3>
+                      <p className="text-sm text-gray-600">{feature.description}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              {evaluationTab === 'mass' ? (
-                <>
-                  <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                    Понятная оценка с конкретными примерами из диалога. Сильные стороны, зоны внимания и рекомендации к действию.
-                  </p>
-
-                  <div className="space-y-4 mb-8">
-                    {[
-                      {
-                        icon: <CheckCircle className="w-5 h-5" />,
-                        title: 'Адекватность и навыки общения',
-                        description: 'Краткое резюме поведения в стандартных ситуациях'
-                      },
-                      {
-                        icon: <MessageSquare className="w-5 h-5" />,
-                        title: 'Ключевые наблюдения',
-                        description: 'Описательные формулировки без оценочных суждений'
-                      },
-                      {
-                        icon: <Video className="w-5 h-5" />,
-                        title: 'Запись и текст',
-                        description: 'Прослушайте запись или прочитайте полный диалог'
-                      }
-                    ].map((feature, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 text-blue-600">
-                          {feature.icon}
-                        </div>
-                        <div>
-                          <h3 className="text-gray-900 font-medium mb-1">{feature.title}</h3>
-                          <p className="text-sm text-gray-600">{feature.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-                    Глубокий технический разбор, который заменит 3 внутренних интервью.
-                  </p>
-
-                  <div className="space-y-4 mb-8">
-                    {[
-                      {
-                        icon: <Target className="w-5 h-5" />,
-                        title: 'Кусок кода с комментариями эксперта',
-                        description: 'Live-coding разбор с подсветкой ошибок и best practices'
-                      },
-                      {
-                        icon: <BarChart className="w-5 h-5" />,
-                        title: 'График оценки компетенций',
-                        description: 'Например: Python: 8/10, SQL: 4/10, System Design: 7/10'
-                      },
-                      {
-                        icon: <Brain className="w-5 h-5" />,
-                        title: 'Технический Scorecard (60+ параметров)',
-                        description: 'От алгоритмов до архитектурных решений'
-                      }
-                    ].map((feature, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0 text-purple-600">
-                          {feature.icon}
-                        </div>
-                        <div>
-                          <h3 className="text-gray-900 font-medium mb-1">{feature.title}</h3>
-                          <p className="text-sm text-gray-600">{feature.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
 
               <button
                 onClick={() => onNavigate('evaluation-demo')}
@@ -936,7 +833,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
           </div>
 
           {/* Trust & Security Section */}
-          <div id="pricing" className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 sm:p-8 border-2 border-purple-200">
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 sm:p-8 border-2 border-purple-200">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-lg">
                 <Shield className="w-6 h-6 text-white" />
@@ -992,30 +889,6 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-1">Запуск за 5 минут без интеграций</h4>
                     <p className="text-sm text-gray-600">Зарегистрируйтесь, опишите вакансию, отправьте ссылку кандидатам. Никаких сложных настроек и установок.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 border border-blue-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <TrendingUp className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-1">Для бизнеса (Mass): Снижение стоимости найма в 5 раз</h4>
-                    <p className="text-sm text-gray-600">Автоматический отбор вместо дорогостоящих HR-агентств. Платите только за результат.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl p-5 border border-purple-100">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Coffee className="w-4 h-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-1">Для IT (CTO): Защита от Burnout команды</h4>
-                    <p className="text-sm text-gray-600">Техлиды пишут код, а не проводят 100-е интервью. Мы берем на себя весь технический скрининг.</p>
                   </div>
                 </div>
               </div>
