@@ -91,6 +91,8 @@ export function InterviewSessionView() {
   const sttMediaStreamRef = useRef<MediaStream | null>(null);
   const sttInt16BufferRef = useRef<number[]>([]);
   const handleWebSocketMessageRef = useRef<((data: any) => void) | null>(null);
+  const confirmedTextLengthRef = useRef(0); // Track length of confirmed (final) text to separate from interim
+  const wasRecordingBeforeMuteRef = useRef(false); // Track if recording was active before mute
   const STT_CHUNK_BYTES = 640; // 20 ms at 16kHz mono 16-bit (very fast streaming for Google Cloud)
 
   const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
@@ -738,46 +740,67 @@ export function InterviewSessionView() {
     // startFillerTimer();
   };
 
-  // Toggle mute (instant microphone disable)
+  // Toggle mute (instant microphone disable/enable with auto-resume)
   const toggleMute = () => {
     const newMutedState = !isMuted;
 
-    // If turning mute ON while recording - PAUSE recording (preserve text for resume)
-    if (newMutedState && isListeningRef.current) {
-      console.log('[Frontend] Muting - pausing recording (preserving text)');
-      userRequestedStopRef.current = true;
+    if (newMutedState) {
+      // Turning mute ON - PAUSE recording (preserve text for auto-resume)
+      if (isListeningRef.current) {
+        console.log('[Frontend] Muting - pausing recording (preserving text for auto-resume)');
+        wasRecordingBeforeMuteRef.current = true; // Remember we were recording
+        userRequestedStopRef.current = true;
 
-      if (silenceTimeoutRef.current) {
-        clearTimeout(silenceTimeoutRef.current);
-        silenceTimeoutRef.current = null;
-      }
-      if (speechPauseTimeoutRef.current) {
-        clearTimeout(speechPauseTimeoutRef.current);
-        speechPauseTimeoutRef.current = null;
-      }
-
-      // Stop recording but preserve text (like pause button)
-      if (useBackendSttRef.current) {
-        stopBackendStt(false); // Stop but DON'T send - preserve text
-      } else {
-        // Browser STT: stop but keep text for resume
-        try {
-          recognition.stop();
-        } catch (e) {
-          console.log('[Frontend] Recognition already stopped:', e);
+        if (silenceTimeoutRef.current) {
+          clearTimeout(silenceTimeoutRef.current);
+          silenceTimeoutRef.current = null;
         }
-        // Keep text in interimTranscript for display
-        const text = finalTranscriptRef.current.trim();
-        if (text) setInterimTranscript(text);
+        if (speechPauseTimeoutRef.current) {
+          clearTimeout(speechPauseTimeoutRef.current);
+          speechPauseTimeoutRef.current = null;
+        }
+
+        // Stop recording but preserve text (like pause button)
+        if (useBackendSttRef.current) {
+          stopBackendStt(false); // Stop but DON'T send - preserve text
+        } else {
+          // Browser STT: stop but keep text for resume
+          try {
+            recognition.stop();
+          } catch (e) {
+            console.log('[Frontend] Recognition already stopped:', e);
+          }
+          // Keep text in interimTranscript for display
+          const text = finalTranscriptRef.current.trim();
+          if (text) setInterimTranscript(text);
+        }
+
+        updateListeningState(false);
+        setSttMethod(null);
+        lastSpeechActivityRef.current = null;
+      } else {
+        wasRecordingBeforeMuteRef.current = false; // We weren't recording
       }
 
-      updateListeningState(false);
-      setSttMethod(null);
-      lastSpeechActivityRef.current = null;
-    }
+      setIsMuted(true);
+      console.log('[Frontend] Microphone muted');
+    } else {
+      // Turning mute OFF - auto-resume if we were recording before
+      setIsMuted(false);
+      console.log('[Frontend] Microphone unmuted');
 
-    setIsMuted(newMutedState);
-    console.log('[Frontend] Microphone muted:', newMutedState);
+      if (wasRecordingBeforeMuteRef.current) {
+        console.log('[Frontend] Auto-resuming recording after unmute');
+        wasRecordingBeforeMuteRef.current = false; // Reset flag
+
+        // Auto-resume recording after a short delay to ensure state is updated
+        setTimeout(() => {
+          if (!isSpeaking && !timeExpired) {
+            toggleListening();
+          }
+        }, 100);
+      }
+    }
   };
 
   // Toggle listening (microphone) - using Web Speech API
@@ -993,14 +1016,18 @@ export function InterviewSessionView() {
       // Always keep existing text - this is the main fix for text disappearing
       console.log('[Frontend] Preserving existing text:', existingText);
       setInterimTranscript(existingText);
+      // When resuming, all existing text is considered "confirmed" since it was preserved from pause
+      confirmedTextLengthRef.current = finalTranscriptRef.current.length;
     } else if (!isResume) {
       // Only clear if no existing text AND not resuming
       console.log('[Frontend] No existing text, starting fresh');
       setInterimTranscript('');
       finalTranscriptRef.current = '';
+      confirmedTextLengthRef.current = 0; // Reset confirmed length
     } else {
       console.log('[Frontend] Resume mode but no text to preserve');
       setInterimTranscript('');
+      confirmedTextLengthRef.current = 0; // Reset confirmed length
     }
     lastSpeechActivityRef.current = Date.now();
 
@@ -1137,12 +1164,36 @@ export function InterviewSessionView() {
           return;
         }
         console.log('[Frontend] STT: Processing text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+
         if (data.type === 'final') {
-          console.log('[Frontend] STT: Final result, adding to finalTranscriptRef');
-          finalTranscriptRef.current += text + ' ';
+          // Final result: add to confirmed text
+          console.log('[Frontend] STT: Final result, adding to confirmed text');
+
+          // Get confirmed part (everything before interim)
+          const currentFull = finalTranscriptRef.current;
+          const confirmedPart = currentFull.substring(0, confirmedTextLengthRef.current).trim();
+
+          // Add new final text to confirmed
+          const newConfirmed = confirmedPart ? `${confirmedPart} ${text}` : text;
+          finalTranscriptRef.current = newConfirmed + ' ';
+          confirmedTextLengthRef.current = finalTranscriptRef.current.length;
+
+          console.log('[Frontend] STT: New confirmed text:', finalTranscriptRef.current);
+          setInterimTranscript(finalTranscriptRef.current.trim());
+        } else {
+          // Interim result: combine with confirmed text
+          const currentFull = finalTranscriptRef.current;
+          const confirmedPart = currentFull.substring(0, confirmedTextLengthRef.current).trim();
+
+          // Display = confirmed + current interim (replaces previous interim)
+          const combined = confirmedPart ? `${confirmedPart} ${text}` : text;
+
+          // Save to finalTranscriptRef for pause (includes interim)
+          finalTranscriptRef.current = combined;
+
+          console.log('[Frontend] STT: Interim - combined:', combined.substring(0, 50));
+          setInterimTranscript(combined);
         }
-        const acc = finalTranscriptRef.current.trim();
-        setInterimTranscript(acc ? `${acc} ${text}` : text);
       } catch (e) {
         console.error('[Frontend] STT: Error processing message:', e);
       }
