@@ -41,11 +41,14 @@ echo -e "${BLUE}║         AI Interview Platform Deploy           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════╝${NC}"
 echo ""
 
-echo -e "${GREEN}Changes to deploy:${NC}"
+echo -e "${GREEN}Latest changes to deploy:${NC}"
 echo "  • Female AI voice (Leda)"
 echo "  • Consent checkbox on registration"
 echo "  • Link marked as used only on session completion"
 echo "  • 30 active links limit per interview"
+echo "  • Thank you page after interview completion"
+echo "  • Fixed microphone auto-start issues"
+echo "  • Fixed backend STT audio timeout errors"
 echo ""
 
 read -p "Continue with deployment? (y/n): " -n 1 -r
@@ -64,17 +67,22 @@ else
     exit 1
 fi
 
-# Step 2: Stop all containers
-print_step "[2/7] Stopping containers..."
-docker-compose -f $COMPOSE_FILE down
-print_success "Containers stopped"
-
-# Step 3: Clean old containers and dangling images
-print_step "[3/7] Cleaning old containers..."
-# Remove all stopped containers for this project
+# Step 2: Force stop all containers (docker-compose down hangs)
+print_step "[2/7] Force stopping containers..."
+set +e  # Don't exit on error during cleanup
+# Stop with short timeout
+docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker stop -t 3 2>/dev/null || true
+# Kill if still running
+docker ps | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+# Remove stopped containers
 docker ps -a | grep -E "ai_hr_|ai_interview_" | awk '{print $1}' | xargs -r docker rm -f 2>/dev/null || true
-# Remove dangling images to free up space
+set -e  # Re-enable exit on error
+print_success "Containers stopped and removed"
+
+# Step 3: Clean dangling images and networks
+print_step "[3/7] Cleaning up..."
 docker image prune -f > /dev/null 2>&1 || true
+docker network prune -f > /dev/null 2>&1 || true
 print_success "Cleanup completed"
 
 # Step 4: Build backend
@@ -131,6 +139,9 @@ if [ "$CONTAINERS_UP" -eq "$CONTAINERS_TOTAL" ] && [ "$CONTAINERS_TOTAL" -gt 0 ]
     echo "  ✓ Consent checkbox (required)"
     echo "  ✓ Link usage tracking on completion"
     echo "  ✓ 30 links limit per interview"
+    echo "  ✓ Thank you page after interview"
+    echo "  ✓ Microphone issues fixed"
+    echo "  ✓ Backend STT timeout fixed"
     echo ""
     echo -e "${YELLOW}Test the deployment:${NC}"
     echo "  1. Open https://screenme.pro"
