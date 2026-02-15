@@ -738,7 +738,8 @@ export function InterviewSessionView() {
 
     // Проверяем реальное состояние через ref, чтобы избежать проблем с асинхронностью setState
     const recognition = (window as any).currentSpeechRecognition;
-    const isActuallyListening = recognition && isListening;
+    // Check both browser and backend STT
+    const isActuallyListening = isListening && (recognition || useBackendSttRef.current);
 
     if (isActuallyListening) {
       console.log('[Frontend] User clicked to stop recording');
@@ -880,11 +881,14 @@ export function InterviewSessionView() {
     ws.onopen = () => {
       useBackendSttRef.current = true;
       setIsListening(true);
-      if (!isResume) {
+      // Preserve text if it exists (resume mode)
+      const existingText = finalTranscriptRef.current.trim();
+      if (!isResume && !existingText) {
         setInterimTranscript('');
         finalTranscriptRef.current = '';
       } else {
-        setInterimTranscript(finalTranscriptRef.current.trim());
+        // Keep existing text visible
+        setInterimTranscript(existingText || finalTranscriptRef.current.trim());
       }
       lastSpeechActivityRef.current = Date.now();
 
@@ -956,9 +960,8 @@ export function InterviewSessionView() {
         if (!data) return;
         if (data.type === 'error') {
           console.warn('[Frontend] Backend STT error:', data.message);
+          // stopBackendStt already calls setIsListening(false) and setSttMethod(null)
           stopBackendStt(false); // Don't send, preserve text
-          setIsListening(false);
-          setSttMethod(null);
           // Don't auto-restart - user must click mic button again
           return;
         }
@@ -986,9 +989,8 @@ export function InterviewSessionView() {
     ws.onerror = () => {
       if (!useBackendSttRef.current) return;
       console.log('[Frontend] Backend STT WebSocket error');
+      // stopBackendStt already calls setIsListening(false) and setSttMethod(null)
       stopBackendStt(false); // Don't send, preserve text
-      setIsListening(false);
-      setSttMethod(null);
       // Don't auto-restart - user must click mic button again
     };
 
