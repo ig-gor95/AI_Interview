@@ -742,9 +742,9 @@ export function InterviewSessionView() {
   const toggleMute = () => {
     const newMutedState = !isMuted;
 
-    // If turning mute ON while recording - stop recording and send text immediately
+    // If turning mute ON while recording - PAUSE recording (preserve text for resume)
     if (newMutedState && isListeningRef.current) {
-      console.log('[Frontend] Muting - stopping active recording and sending text');
+      console.log('[Frontend] Muting - pausing recording (preserving text)');
       userRequestedStopRef.current = true;
 
       if (silenceTimeoutRef.current) {
@@ -756,24 +756,19 @@ export function InterviewSessionView() {
         speechPauseTimeoutRef.current = null;
       }
 
-      // CRITICAL FIX: Send text when muting (like clicking send button)
-      // This prevents text loss and ensures clean state for next recording
+      // Stop recording but preserve text (like pause button)
       if (useBackendSttRef.current) {
-        stopBackendStt(true); // Stop AND send (changed from false to true)
+        stopBackendStt(false); // Stop but DON'T send - preserve text
       } else {
-        // Browser STT: send text then stop
-        const finalText = finalTranscriptRef.current.trim();
-        if (finalText) {
-          console.log('[Frontend] Sending text before mute:', finalText);
-          sendTextMessage(finalText);
-          finalTranscriptRef.current = '';
-          setInterimTranscript('');
-        }
+        // Browser STT: stop but keep text for resume
         try {
           recognition.stop();
         } catch (e) {
           console.log('[Frontend] Recognition already stopped:', e);
         }
+        // Keep text in interimTranscript for display
+        const text = finalTranscriptRef.current.trim();
+        if (text) setInterimTranscript(text);
       }
 
       updateListeningState(false);
@@ -1002,6 +997,47 @@ export function InterviewSessionView() {
     }
     lastSpeechActivityRef.current = Date.now();
 
+    // Fallback: If no STT results received in 10 seconds, switch to browser STT
+    const noResultsTimerRef = { current: null as NodeJS.Timeout | null };
+    noResultsTimerRef.current = setTimeout(() => {
+      if (useBackendSttRef.current && isListeningRef.current) {
+        const textReceived = finalTranscriptRef.current.trim().length > existingText.length;
+        if (!textReceived) {
+          console.warn('[Frontend] STT: No results for 10s, falling back to browser STT');
+          setShowSttWarning(true);
+
+          // Stop backend STT
+          if (sttWsRef.current) {
+            try {
+              sttWsRef.current.send('stop');
+              sttWsRef.current.close();
+            } catch (_) {}
+            sttWsRef.current = null;
+          }
+          if (sttMediaStreamRef.current) {
+            sttMediaStreamRef.current.getTracks().forEach((t) => t.stop());
+            sttMediaStreamRef.current = null;
+          }
+          if (sttScriptNodeRef.current && sttAudioContextRef.current) {
+            try {
+              sttScriptNodeRef.current.disconnect();
+            } catch (_) {}
+            sttScriptNodeRef.current = null;
+          }
+          if (sttAudioContextRef.current) {
+            sttAudioContextRef.current.close().catch(() => {});
+            sttAudioContextRef.current = null;
+          }
+
+          useBackendSttRef.current = false;
+          setSttMethod('browser');
+
+          // Start browser STT with existing text preserved
+          startSpeechRecognition(false);
+        }
+      }
+    }, 10000); // 10 second timeout
+
     navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         sttMediaStreamRef.current = stream;
         const sampleRate = 16000;
@@ -1062,6 +1098,13 @@ export function InterviewSessionView() {
     console.log('[Frontend] STT: Setting up onmessage handler');
     ws.onmessage = (event) => {
       console.log('[Frontend] STT: Received message from backend');
+
+      // Clear no-results fallback timer on first message
+      if (noResultsTimerRef.current) {
+        clearTimeout(noResultsTimerRef.current);
+        noResultsTimerRef.current = null;
+      }
+
       lastSpeechActivityRef.current = Date.now();
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
