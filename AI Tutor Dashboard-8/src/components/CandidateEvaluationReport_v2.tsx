@@ -90,7 +90,7 @@ export function CandidateEvaluationReport_v2({
       recommended: 'РЕКОМЕНДУЕТСЯ',
       possible: 'ВОЗМОЖНО ПОДХОДИТ',
       notRecommended: 'НЕ РЕКОМЕНДУЕТСЯ',
-      meetsRequirements: 'Соответствует обязательным требованиям',
+      meetsRequirements: 'Ключевые критерии',
       concernsOrMissing: 'Не соответствует / Точки внимания',
       recommendationTitle: 'Рекомендация',
       backButton: 'Назад',
@@ -111,7 +111,7 @@ export function CandidateEvaluationReport_v2({
       recommended: 'RECOMMENDED',
       possible: 'POSSIBLY SUITABLE',
       notRecommended: 'NOT RECOMMENDED',
-      meetsRequirements: 'Meets Mandatory Requirements',
+      meetsRequirements: 'Key Criteria',
       concernsOrMissing: 'Does Not Meet / Points of Attention',
       recommendationTitle: 'Recommendation',
       backButton: 'Back',
@@ -317,24 +317,6 @@ export function CandidateEvaluationReport_v2({
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed">{recommendation}</p>
                 </div>
-
-                {/* Follow-up Questions */}
-                {followUpQuestions && followUpQuestions.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <AlertTriangle className="w-5 h-5 text-amber-600" />
-                      <h3 className="text-base font-bold text-gray-900">{t.concernsOrMissing}</h3>
-                    </div>
-                    <ul className="space-y-2">
-                      {followUpQuestions.map((question, index) => (
-                        <li key={index} className="flex items-start gap-2 text-sm text-amber-800">
-                          <span className="font-semibold">•</span>
-                          <span>{question}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
             </div>
 

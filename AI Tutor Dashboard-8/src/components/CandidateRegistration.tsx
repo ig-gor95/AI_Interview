@@ -186,7 +186,7 @@ export function CandidateRegistration() {
               className="text-sm text-gray-700 leading-relaxed cursor-pointer select-none"
             >
               Я даю согласие на обработку моих персональных данных в соответствии с{' '}
-              <a href="/privacy" target="_blank" className="text-blue-600 hover:underline">
+              <a href="/privacy-policy.pdf" target="_blank" rel="noopener noreferrer" download className="text-blue-600 hover:underline">
                 Политикой конфиденциальности
               </a>
             </label>
