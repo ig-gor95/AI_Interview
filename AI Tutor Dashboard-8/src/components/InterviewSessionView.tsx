@@ -50,7 +50,7 @@ export function InterviewSessionView() {
   const [showResumeDialog, setShowResumeDialog] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isListening, setListeningState] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -99,7 +99,7 @@ export function InterviewSessionView() {
   const FILLER_DELAY_MS = 3500;
 
   // Helper function to sync state and ref
-  const setListeningState = (value: boolean) => {
+  const updateListeningState = (value: boolean) => {
     isListeningRef.current = value;
     setIsListening(value);
   };
@@ -399,7 +399,7 @@ export function InterviewSessionView() {
                 try { recognition.stop(); } catch (_) {}
               }
               (window as any).currentSpeechRecognition = null;
-              setListeningState(false);
+              updateListeningState(false);
               lastSpeechActivityRef.current = null;
             }
             // Очищаем текст
@@ -692,7 +692,7 @@ export function InterviewSessionView() {
           try { recognition.stop(); } catch (_) {}
         }
         (window as any).currentSpeechRecognition = null;
-        setListeningState(false);
+        updateListeningState(false);
         lastSpeechActivityRef.current = null;
       }
     }
@@ -776,7 +776,7 @@ export function InterviewSessionView() {
       } catch (e) {
         console.log('[Frontend] Recognition already stopped:', e);
       }
-      setListeningState(false);
+      updateListeningState(false);
       setSttMethod(null);
       lastSpeechActivityRef.current = null;
       return;
@@ -859,7 +859,7 @@ export function InterviewSessionView() {
   function stopBackendStt(shouldSend = true) {
     console.log('[Frontend] stopBackendStt - shouldSend:', shouldSend, 'current text:', finalTranscriptRef.current);
     // Update UI immediately
-    setListeningState(false);
+    updateListeningState(false);
     setSttMethod(null);
 
     if (silenceTimeoutRef.current) {
@@ -905,7 +905,7 @@ export function InterviewSessionView() {
   // New function that uses an already-open WebSocket connection
   function startBackendSttWithConnection(ws: WebSocket, isResume?: boolean) {
     useBackendSttRef.current = true;
-    setListeningState(true);
+    updateListeningState(true);
     // ALWAYS preserve text if it exists - never clear finalTranscriptRef unless explicitly sending
     const existingText = finalTranscriptRef.current.trim();
     console.log('[Frontend] startBackendSttWithConnection - isResume:', isResume, 'existingText:', existingText);
@@ -993,7 +993,7 @@ export function InterviewSessionView() {
         if (!data) return;
         if (data.type === 'error') {
           console.warn('[Frontend] Backend STT error:', data.message);
-          // stopBackendStt already calls setListeningState(false) and setSttMethod(null)
+          // stopBackendStt already calls updateListeningState(false) and setSttMethod(null)
           stopBackendStt(false); // Don't send, preserve text
           // Don't auto-restart - user must click mic button again
           return;
@@ -1045,7 +1045,7 @@ export function InterviewSessionView() {
 
     recognition.onstart = () => {
       console.log('[Frontend] Speech recognition started');
-      setListeningState(true);
+      updateListeningState(true);
       setSttMethod('browser');
       if (isInitialStart) {
         setInterimTranscript('');
@@ -1105,7 +1105,7 @@ export function InterviewSessionView() {
           if (finalText) {
             setInterimTranscript(finalText);
           }
-          setListeningState(false);
+          updateListeningState(false);
           lastSpeechActivityRef.current = null;
         }
         silenceTimeoutRef.current = null;
@@ -1133,14 +1133,14 @@ export function InterviewSessionView() {
       if (userRequestedStopRef.current) {
         // User clicked stop or silence timeout — stay stopped, keep text visible
         userRequestedStopRef.current = false;
-        setListeningState(false);
+        updateListeningState(false);
         setSttMethod(null);
         lastSpeechActivityRef.current = null;
       } else {
         // Browser auto-ended recognition (pause, no-speech, etc.)
         // Do NOT restart automatically - user must click mic button to start again
         console.log('[Frontend] Browser auto-ended recognition, staying stopped (no auto-restart)');
-        setListeningState(false);
+        updateListeningState(false);
         setSttMethod(null);
         lastSpeechActivityRef.current = null;
       }
@@ -1167,7 +1167,7 @@ export function InterviewSessionView() {
       if (event.error !== 'no-speech') {
         setError(`Ошибка распознавания речи: ${event.error}`);
       }
-      setListeningState(false);
+      updateListeningState(false);
       setSttMethod(null);
       lastSpeechActivityRef.current = null;
     };
