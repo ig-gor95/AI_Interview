@@ -29,9 +29,9 @@ COPY --from=builder /app/build /usr/share/nginx/html
 # Expose port 80
 EXPOSE 80
 
-# Health check
+# Health check - check if nginx is responding (301 redirect is expected and healthy)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost/ || exit 1
+    CMD wget --quiet --tries=1 --spider --server-response http://localhost/ 2>&1 | grep -E "HTTP.*301|HTTP.*200" || exit 1
 
 # Use SIGQUIT for graceful shutdown of nginx (SIGTERM is too aggressive)
 STOPSIGNAL SIGQUIT
