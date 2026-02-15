@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Video, Mic, MicOff, PhoneOff, MessageSquare, Users, Settings, ChevronUp, AlertCircle } from 'lucide-react';
+import { Video, Mic, MicOff, PhoneOff, MessageSquare, Users, Settings, ChevronUp, AlertCircle, X } from 'lucide-react';
 import { AIAvatar } from './AIAvatar';
 import { publicAPI } from '@/lib/api';
 import { Alert, AlertDescription } from './ui/alert';
@@ -372,6 +372,34 @@ export function InterviewSessionView() {
         console.log('[Frontend] Message received:', data.role, data.message?.substring(0, 50));
         stopFillerAudio();
         if (data.role === 'ai') {
+          // Останавливаем микрофон когда AI начинает говорить
+          if (isListening) {
+            console.log('[Frontend] AI speaking - stopping microphone');
+            userRequestedStopRef.current = true;
+            if (silenceTimeoutRef.current) {
+              clearTimeout(silenceTimeoutRef.current);
+              silenceTimeoutRef.current = null;
+            }
+            if (speechPauseTimeoutRef.current) {
+              clearTimeout(speechPauseTimeoutRef.current);
+              speechPauseTimeoutRef.current = null;
+            }
+            if (useBackendSttRef.current) {
+              stopBackendStt(false);
+            } else {
+              const recognition = (window as any).currentSpeechRecognition;
+              if (recognition) {
+                try { recognition.stop(); } catch (_) {}
+              }
+              (window as any).currentSpeechRecognition = null;
+              setIsListening(false);
+              lastSpeechActivityRef.current = null;
+            }
+            // Очищаем текст
+            finalTranscriptRef.current = '';
+            setInterimTranscript('');
+          }
+
           setIsSpeaking(true);
           setIsProcessing(false);
           isUserTurnRef.current = false;
@@ -705,7 +733,8 @@ export function InterviewSessionView() {
 
   // Toggle listening (microphone) - using Web Speech API
   const toggleListening = () => {
-    if (isMuted || timeExpired) return;
+    // Блокируем включение микрофона если: выключен звук, время истекло, или AI говорит
+    if (isMuted || timeExpired || isSpeaking) return;
 
     // Проверяем реальное состояние через ref, чтобы избежать проблем с асинхронностью setState
     const recognition = (window as any).currentSpeechRecognition;
@@ -1532,18 +1561,19 @@ export function InterviewSessionView() {
             </button>
             <button
               onClick={toggleListening}
-              disabled={isMuted || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
+              disabled={isMuted || isSpeaking || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
               className={`px-4 sm:px-8 py-2 sm:py-4 rounded-xl transition-all font-semibold ${
                 isListening
                   ? 'bg-red-600 hover:bg-red-700 text-white'
-                  : isMuted || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))
+                  : isMuted || isSpeaking || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))
                   ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
               }`}
+              title={isSpeaking ? 'Подождите, пока AI закончит говорить' : undefined}
             >
               <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
               <span className="text-[10px] sm:text-xs font-bold">
-                {isListening ? 'ГОВОРЮ' : 'ОТВЕТ'}
+                {isListening ? 'ГОВОРЮ' : isSpeaking ? 'AI ГОВОРИТ' : 'ОТВЕТ'}
               </span>
             </button>
           </div>
