@@ -749,8 +749,8 @@ export function InterviewSessionView() {
     console.log('[Frontend] toggleListening - currently listening:', currentlyListening, 'hasText:', hasText);
 
     if (currentlyListening) {
-      // Currently listening - stop recording
-      console.log('[Frontend] User clicked to stop recording');
+      // Currently listening - stop recording AND send
+      console.log('[Frontend] User clicked to stop recording and send');
       userRequestedStopRef.current = true;
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
@@ -761,16 +761,18 @@ export function InterviewSessionView() {
         speechPauseTimeoutRef.current = null;
       }
       if (useBackendSttRef.current) {
-        stopBackendStt(false); // Only stop recording, don't send — user sends via button
+        stopBackendStt(true); // Stop recording and send
         return;
       }
-      // Keep text visible for user to send via button
+      // Browser STT: stop and send
       const finalText = finalTranscriptRef.current.trim();
       if (finalText) {
-        console.log('[Frontend] Mic stopped, text preserved for manual send:', finalText);
-        setInterimTranscript(finalText);
+        console.log('[Frontend] Sending message:', finalText);
+        sendTextMessage(finalText);
+        finalTranscriptRef.current = '';
+        setInterimTranscript('');
       } else {
-        console.log('[Frontend] No text recorded');
+        console.log('[Frontend] No text recorded, nothing to send');
       }
       try {
         recognition.stop();
@@ -780,15 +782,6 @@ export function InterviewSessionView() {
       updateListeningState(false);
       setSttMethod(null);
       lastSpeechActivityRef.current = null;
-      return;
-    }
-
-    // Not listening and has text - send the message
-    if (!currentlyListening && hasText) {
-      console.log('[Frontend] User clicked to send message:', finalTranscriptRef.current.trim());
-      sendTextMessage(finalTranscriptRef.current.trim());
-      finalTranscriptRef.current = '';
-      setInterimTranscript('');
       return;
     }
 
@@ -1600,7 +1593,7 @@ export function InterviewSessionView() {
               disabled={isMuted || isSpeaking || (!isListening && !finalTranscriptRef.current?.trim() && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
               className={`px-4 sm:px-8 py-2 sm:py-4 rounded-xl transition-all font-semibold ${
                 isListening
-                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white animate-pulse'
                   : finalTranscriptRef.current?.trim()
                   ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
                   : isMuted || isSpeaking || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))
@@ -1612,7 +1605,7 @@ export function InterviewSessionView() {
               <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
               <span className="text-[10px] sm:text-xs font-bold">
                 {isListening
-                  ? 'ГОВОРЮ'
+                  ? 'ОТПРАВИТЬ ОТВЕТ'
                   : finalTranscriptRef.current?.trim()
                   ? 'ОТПРАВИТЬ'
                   : isSpeaking
