@@ -109,6 +109,12 @@ services:
     container_name: ai_hr_frontend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # SSL certificates from Let's Encrypt
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Nginx SSL config
+      - ./nginx-ssl.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
         condition: service_healthy
