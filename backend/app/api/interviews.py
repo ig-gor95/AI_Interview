@@ -1,7 +1,7 @@
 """Interviews API routes - Interview templates management"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import selectinload
 from typing import List
 import uuid
@@ -527,7 +527,21 @@ async def create_interview_link(
     
     if interview.organizer_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    
+
+    # Check active links limit (unused links count)
+    active_links_result = await db.execute(
+        select(func.count(InterviewLink.id))
+        .where(InterviewLink.interview_id == interview.id)
+        .where(InterviewLink.is_used == False)
+    )
+    active_links_count = active_links_result.scalar_one()
+
+    if active_links_count >= 30:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Достигнут лимит активных ссылок (30). Дождитесь завершения интервью по существующим ссылкам или удалите неиспользованные."
+        )
+
     # Generate unique token
     token = secrets.token_urlsafe(32)
     

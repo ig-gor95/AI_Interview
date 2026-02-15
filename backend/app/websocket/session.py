@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal
 from app.models.session import Session, SessionStatus, SessionTranscript, SessionQuestionAnswer
-from app.models.interview import Interview, InterviewQuestion
+from app.models.interview import Interview, InterviewQuestion, InterviewLink
 from app.models.simulation import SimulationScenario, SimulationDialog
 from app.services.openai_service import AIService
 from app.services.audio_service import AudioService
@@ -1035,9 +1035,19 @@ async def _handle_end_session(
     session: Session,
     db: AsyncSession
 ):
-    """Handle session end - mark completed, merge audio, generate summary via GPT, notify client"""
+    """Handle session end - mark completed, mark link as used, merge audio, generate summary via GPT, notify client"""
     session.status = SessionStatus.COMPLETED
     session.completed_at = datetime.now(timezone.utc)
+
+    # Mark interview link as used when session completes
+    result = await db.execute(
+        select(InterviewLink).where(InterviewLink.session_id == session.id)
+    )
+    interview_link = result.scalar_one_or_none()
+    if interview_link:
+        interview_link.is_used = True
+        print(f"[SessionEnd] Marked link {interview_link.id} as used for session {session.id}")
+
     await db.commit()
 
     # Trigger audio merging for completed interview

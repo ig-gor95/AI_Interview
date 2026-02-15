@@ -158,11 +158,10 @@ async def register_candidate(
     
     db.add(new_session)
     await db.flush()  # Get session ID
-    
-    # Update link
-    link.is_used = True
+
+    # Link session to the link (but don't mark as used yet - will be marked on session end)
     link.session_id = new_session.id
-    
+
     await db.commit()
     await db.refresh(new_session)
     
