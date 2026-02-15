@@ -788,7 +788,7 @@ export function InterviewSessionView() {
     // Use ref for instant state check (no async setState delay)
     const currentlyListening = isListeningRef.current;
     const hasText = finalTranscriptRef.current.trim().length > 0;
-    console.log('[Frontend] toggleListening - currently listening:', currentlyListening, 'hasText:', hasText);
+    console.log('[Frontend] toggleListening START - currently listening:', currentlyListening, 'hasText:', hasText, 'text:', finalTranscriptRef.current);
 
     if (currentlyListening) {
       // Currently listening - stop recording AND send
@@ -925,22 +925,22 @@ export function InterviewSessionView() {
       sttAudioContextRef.current.close().catch(() => {});
       sttAudioContextRef.current = null;
     }
-    if (sttWsRef.current) {
-      try {
-        // Send stop signal to backend STT
-        sttWsRef.current.send('stop');
 
-        // CRITICAL FIX: Wait for final result before closing WebSocket
-        // Google Cloud Speech-to-Text sends final result after receiving 'stop' signal
-        // Wait 500ms to receive final transcription, then close and send/clear
-        const ws = sttWsRef.current;
-        setTimeout(() => {
-          try {
-            ws.close();
-          } catch (_) {}
+    if (shouldSend) {
+      // SEND mode: wait for final result then send
+      if (sttWsRef.current) {
+        try {
+          const ws = sttWsRef.current;
+          sttWsRef.current = null; // Clear ref immediately
 
-          // Now process the text after waiting for final result
-          if (shouldSend) {
+          ws.send('stop');
+
+          // Wait 500ms for final result from Google Cloud
+          setTimeout(() => {
+            try {
+              ws.close();
+            } catch (_) {}
+
             const text = finalTranscriptRef.current.trim();
             console.log('[Frontend] Sending text after STT stop delay:', text);
             if (text) {
@@ -948,28 +948,35 @@ export function InterviewSessionView() {
               finalTranscriptRef.current = '';
             }
             setInterimTranscript('');
-          } else {
-            const text = finalTranscriptRef.current.trim();
-            if (text) setInterimTranscript(text);
-          }
-        }, 500); // Wait 500ms for final result from Google Cloud
-
-        sttWsRef.current = null;
-      } catch (_) {}
-    } else {
-      // No WebSocket, process immediately
-      if (shouldSend) {
+          }, 500);
+        } catch (_) {}
+      } else {
+        // No WebSocket, process immediately
         const text = finalTranscriptRef.current.trim();
         if (text) {
           sendTextMessage(text);
           finalTranscriptRef.current = '';
         }
         setInterimTranscript('');
-      } else {
-        const text = finalTranscriptRef.current.trim();
-        if (text) setInterimTranscript(text);
+      }
+    } else {
+      // PAUSE mode (mute): close immediately, preserve text for resume
+      console.log('[Frontend] stopBackendStt PAUSE mode - preserving text:', finalTranscriptRef.current);
+      if (sttWsRef.current) {
+        try {
+          sttWsRef.current.send('stop');
+          sttWsRef.current.close();
+        } catch (_) {}
+        sttWsRef.current = null;
+      }
+      // CRITICAL: Keep text in finalTranscriptRef for resume, display in interim
+      const text = finalTranscriptRef.current.trim();
+      console.log('[Frontend] Preserved text for display:', text);
+      if (text) {
+        setInterimTranscript(text);
       }
     }
+
     useBackendSttRef.current = false;
     lastSpeechActivityRef.current = null;
   }
