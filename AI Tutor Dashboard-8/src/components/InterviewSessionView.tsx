@@ -742,9 +742,9 @@ export function InterviewSessionView() {
   const toggleMute = () => {
     const newMutedState = !isMuted;
 
-    // If turning mute ON while recording - stop recording immediately
+    // If turning mute ON while recording - stop recording and send text immediately
     if (newMutedState && isListeningRef.current) {
-      console.log('[Frontend] Muting - stopping active recording');
+      console.log('[Frontend] Muting - stopping active recording and sending text');
       userRequestedStopRef.current = true;
 
       if (silenceTimeoutRef.current) {
@@ -756,9 +756,19 @@ export function InterviewSessionView() {
         speechPauseTimeoutRef.current = null;
       }
 
+      // CRITICAL FIX: Send text when muting (like clicking send button)
+      // This prevents text loss and ensures clean state for next recording
       if (useBackendSttRef.current) {
-        stopBackendStt(false); // Stop but don't send
+        stopBackendStt(true); // Stop AND send (changed from false to true)
       } else {
+        // Browser STT: send text then stop
+        const finalText = finalTranscriptRef.current.trim();
+        if (finalText) {
+          console.log('[Frontend] Sending text before mute:', finalText);
+          sendTextMessage(finalText);
+          finalTranscriptRef.current = '';
+          setInterimTranscript('');
+        }
         try {
           recognition.stop();
         } catch (e) {
@@ -1049,7 +1059,9 @@ export function InterviewSessionView() {
     });
 
     // Setup WebSocket message handlers
+    console.log('[Frontend] STT: Setting up onmessage handler');
     ws.onmessage = (event) => {
+      console.log('[Frontend] STT: Received message from backend');
       lastSpeechActivityRef.current = Date.now();
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
@@ -1057,7 +1069,11 @@ export function InterviewSessionView() {
       }
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : null;
-        if (!data) return;
+        if (!data) {
+          console.log('[Frontend] STT: No data in message');
+          return;
+        }
+        console.log('[Frontend] STT: Message type:', data.type, 'text length:', (data.text || '').length);
         if (data.type === 'error') {
           console.warn('[Frontend] Backend STT error:', data.message);
           // stopBackendStt already calls updateListeningState(false) and setSttMethod(null)
@@ -1066,13 +1082,20 @@ export function InterviewSessionView() {
           return;
         }
         const text = (data.text || '').trim();
-        if (!text) return;
+        if (!text) {
+          console.log('[Frontend] STT: Empty text, ignoring');
+          return;
+        }
+        console.log('[Frontend] STT: Processing text:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
         if (data.type === 'final') {
+          console.log('[Frontend] STT: Final result, adding to finalTranscriptRef');
           finalTranscriptRef.current += text + ' ';
         }
         const acc = finalTranscriptRef.current.trim();
         setInterimTranscript(acc ? `${acc} ${text}` : text);
-      } catch (_) {}
+      } catch (e) {
+        console.error('[Frontend] STT: Error processing message:', e);
+      }
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = setTimeout(() => {
         if (!userRequestedStopRef.current && useBackendSttRef.current) {
@@ -1086,8 +1109,16 @@ export function InterviewSessionView() {
       }, SILENCE_TIMEOUT_MS);
     };
 
-    // Note: ws.onerror and ws.onclose are already set in toggleListening()
-    // before this function is called, so we don't override them here
+    // Override error and close handlers for active recording session
+    // (initial handlers in toggleListening were for connection fallback)
+    ws.onerror = (error) => {
+      console.error('[Frontend] STT: WebSocket error during recording:', error);
+    };
+
+    ws.onclose = (event) => {
+      console.log('[Frontend] STT: WebSocket closed during recording, code:', event.code, 'reason:', event.reason);
+      sttWsRef.current = null;
+    };
   }
 
   // Вынесено в отдельную функцию, чтобы перезапускать при onend (пауза 2–3 сек не означает конец речи)
