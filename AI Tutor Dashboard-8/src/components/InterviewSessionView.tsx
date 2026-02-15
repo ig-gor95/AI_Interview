@@ -784,36 +784,48 @@ export function InterviewSessionView() {
       return;
     }
 
-    console.log('[Frontend] Starting recording (try backend STT first)', isResume ? '(resume)' : '');
+    console.log('[Frontend] Starting recording (backend STT)', isResume ? '(resume)' : '');
     userRequestedStopRef.current = false;
     lastSpeechActivityRef.current = Date.now();
     const sid = sessionId;
     if (sid) {
       const wsUrl = buildSttWsUrl(sid);
-      const probe = new WebSocket(wsUrl);
+      // Connect directly without probe - faster startup
+      const ws = new WebSocket(wsUrl);
+      sttWsRef.current = ws;
+      setSttMethod('backend');
+      setShowSttWarning(false);
+
+      // Fallback to browser if backend doesn't connect in 2 seconds
       const fallbackTimer = setTimeout(() => {
-        if (probe.readyState !== WebSocket.OPEN) {
+        if (ws.readyState !== WebSocket.OPEN) {
           console.warn('[Frontend] Backend STT connection timeout, using Web Speech API');
-          probe.close();
+          ws.close();
+          sttWsRef.current = null;
           setSttMethod('browser');
           setShowSttWarning(true);
           startSpeechRecognition(!isResume);
         }
-      }, 1000); // Quick timeout - if backend not ready in 1 sec, use browser
-      probe.onopen = () => {
+      }, 2000);
+
+      // Setup backend STT directly on this connection
+      ws.onopen = () => {
         clearTimeout(fallbackTimer);
-        probe.close();
-        sttWsRef.current = null;
-        setSttMethod('backend');
-        setShowSttWarning(false);
-        startBackendStt(isResume);
+        console.log('[Frontend] Backend STT connected');
+        startBackendSttWithConnection(ws, isResume);
       };
-      probe.onerror = () => {
+
+      ws.onerror = () => {
         clearTimeout(fallbackTimer);
-        probe.close();
+        ws.close();
+        sttWsRef.current = null;
         setSttMethod('browser');
         setShowSttWarning(true);
         startSpeechRecognition(!isResume);
+      };
+
+      ws.onclose = () => {
+        sttWsRef.current = null;
       };
     } else {
       startSpeechRecognition(!isResume);
@@ -829,6 +841,10 @@ export function InterviewSessionView() {
   }
 
   function stopBackendStt(shouldSend = true) {
+    // Update UI immediately
+    setIsListening(false);
+    setSttMethod(null);
+
     if (silenceTimeoutRef.current) {
       clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = null;
@@ -866,33 +882,26 @@ export function InterviewSessionView() {
       if (text) setInterimTranscript(text);
     }
     useBackendSttRef.current = false;
-    setIsListening(false);
-    setSttMethod(null);
     lastSpeechActivityRef.current = null;
   }
 
-  function startBackendStt(isResume?: boolean) {
-    const sid = sessionId;
-    if (!sid) return;
-    const wsUrl = buildSttWsUrl(sid);
-    const ws = new WebSocket(wsUrl);
-    sttWsRef.current = ws;
+  // New function that uses an already-open WebSocket connection
+  function startBackendSttWithConnection(ws: WebSocket, isResume?: boolean) {
+    useBackendSttRef.current = true;
+    setIsListening(true);
+    // Preserve text if it exists (resume mode)
+    const existingText = finalTranscriptRef.current.trim();
+    if (!isResume && !existingText) {
+      setInterimTranscript('');
+      finalTranscriptRef.current = '';
+    } else {
+      // Keep existing text visible
+      console.log('[Frontend] Resume mode - preserving text:', existingText);
+      setInterimTranscript(existingText);
+    }
+    lastSpeechActivityRef.current = Date.now();
 
-    ws.onopen = () => {
-      useBackendSttRef.current = true;
-      setIsListening(true);
-      // Preserve text if it exists (resume mode)
-      const existingText = finalTranscriptRef.current.trim();
-      if (!isResume && !existingText) {
-        setInterimTranscript('');
-        finalTranscriptRef.current = '';
-      } else {
-        // Keep existing text visible
-        setInterimTranscript(existingText || finalTranscriptRef.current.trim());
-      }
-      lastSpeechActivityRef.current = Date.now();
-
-      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
         sttMediaStreamRef.current = stream;
         const sampleRate = 16000;
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
@@ -937,18 +946,18 @@ export function InterviewSessionView() {
             } catch (_) {}
           }
         };
-        source.connect(scriptNode);
-        const gainNode = ctx.createGain();
-        gainNode.gain.value = 0;
-        scriptNode.connect(gainNode);
-        gainNode.connect(ctx.destination);
-      }).catch((err) => {
-        console.error('[Frontend] STT mic error:', err);
-        setError('Нет доступа к микрофону');
-        stopBackendStt();
-      });
-    };
+      source.connect(scriptNode);
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 0;
+      scriptNode.connect(gainNode);
+      gainNode.connect(ctx.destination);
+    }).catch((err) => {
+      console.error('[Frontend] STT mic error:', err);
+      setError('Нет доступа к микрофону');
+      stopBackendStt();
+    });
 
+    // Setup WebSocket message handlers
     ws.onmessage = (event) => {
       lastSpeechActivityRef.current = Date.now();
       if (silenceTimeoutRef.current) {
@@ -986,17 +995,8 @@ export function InterviewSessionView() {
       }, SILENCE_TIMEOUT_MS);
     };
 
-    ws.onerror = () => {
-      if (!useBackendSttRef.current) return;
-      console.log('[Frontend] Backend STT WebSocket error');
-      // stopBackendStt already calls setIsListening(false) and setSttMethod(null)
-      stopBackendStt(false); // Don't send, preserve text
-      // Don't auto-restart - user must click mic button again
-    };
-
-    ws.onclose = () => {
-      sttWsRef.current = null;
-    };
+    // Note: ws.onerror and ws.onclose are already set in toggleListening()
+    // before this function is called, so we don't override them here
   }
 
   // Вынесено в отдельную функцию, чтобы перезапускать при onend (пауза 2–3 сек не означает конец речи)
