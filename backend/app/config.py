@@ -23,10 +23,10 @@ class Settings(BaseSettings):
     # TTS — только Google или отключено
     tts_service: str = "google"  # "google" или "none"
     google_application_credentials: str = "/app/gcp-credentials.json"  # Path to service account JSON file in Docker
-    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Orus"  # Leda (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
+    google_cloud_voice_name: str = "ru-RU-Chirp3-HD-Leda"  # Leda - женский голос (Chirp3 HD), можно переопределить через GOOGLE_CLOUD_VOICE_NAME в .env
     google_cloud_voice_language: str = "ru-RU"
     google_cloud_speaking_rate: float = 1.0  # Скорость речи (0.25-4.0), можно переопределить через GOOGLE_CLOUD_SPEAKING_RATE в .env
-    google_cloud_pitch: float = 1.0  # Высота тона в семитонах (-20.0 до +20.0), можно переопределить через GOOGLE_CLOUD_PITCH в .env
+    google_cloud_pitch: float = 0.0  # Высота тона в семитонах (-20.0 до +20.0), можно переопределить через GOOGLE_CLOUD_PITCH в .env
     
     # Security
     secret_key: str = "test-secret-key"

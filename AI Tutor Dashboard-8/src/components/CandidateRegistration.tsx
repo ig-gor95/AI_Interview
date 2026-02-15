@@ -5,6 +5,7 @@ import { publicAPI } from '@/lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox';
 
 export function CandidateRegistration() {
   const { token } = useParams<{ token: string }>();
@@ -13,6 +14,7 @@ export function CandidateRegistration() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [consentGiven, setConsentGiven] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingInterview, setIsLoadingInterview] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +48,16 @@ export function CandidateRegistration() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!token) return;
-    
+
     if (!firstName.trim() || !lastName.trim()) {
       setError('Пожалуйста, укажите имя и фамилию');
+      return;
+    }
+
+    if (!consentGiven) {
+      setError('Необходимо дать согласие на обработку персональных данных');
       return;
     }
 
@@ -166,6 +173,25 @@ export function CandidateRegistration() {
             </div>
           </div>
 
+          <div className="flex items-start gap-3 pt-2">
+            <Checkbox
+              id="consent"
+              checked={consentGiven}
+              onCheckedChange={(checked) => setConsentGiven(checked === true)}
+              disabled={isLoading}
+              className="mt-1"
+            />
+            <label
+              htmlFor="consent"
+              className="text-sm text-gray-700 leading-relaxed cursor-pointer select-none"
+            >
+              Я даю согласие на обработку моих персональных данных в соответствии с{' '}
+              <a href="/privacy" target="_blank" className="text-blue-600 hover:underline">
+                Политикой конфиденциальности
+              </a>
+            </label>
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -175,7 +201,7 @@ export function CandidateRegistration() {
 
           <Button
             type="submit"
-            disabled={isLoading || !firstName.trim() || !lastName.trim()}
+            disabled={isLoading || !firstName.trim() || !lastName.trim() || !consentGiven}
             className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
           >
             {isLoading ? (
@@ -191,10 +217,6 @@ export function CandidateRegistration() {
             )}
           </Button>
         </form>
-
-        <p className="text-xs text-gray-500 text-center mt-6">
-          Нажимая "Начать интервью", вы соглашаетесь с обработкой ваших данных
-        </p>
       </div>
     </div>
   );
