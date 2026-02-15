@@ -745,7 +745,8 @@ export function InterviewSessionView() {
 
     // Use ref for instant state check (no async setState delay)
     const currentlyListening = isListeningRef.current;
-    console.log('[Frontend] toggleListening - currently listening:', currentlyListening);
+    const hasText = finalTranscriptRef.current.trim().length > 0;
+    console.log('[Frontend] toggleListening - currently listening:', currentlyListening, 'hasText:', hasText);
 
     if (currentlyListening) {
       // Currently listening - stop recording
@@ -779,6 +780,15 @@ export function InterviewSessionView() {
       updateListeningState(false);
       setSttMethod(null);
       lastSpeechActivityRef.current = null;
+      return;
+    }
+
+    // Not listening and has text - send the message
+    if (!currentlyListening && hasText) {
+      console.log('[Frontend] User clicked to send message:', finalTranscriptRef.current.trim());
+      sendTextMessage(finalTranscriptRef.current.trim());
+      finalTranscriptRef.current = '';
+      setInterimTranscript('');
       return;
     }
 
@@ -1586,29 +1596,28 @@ export function InterviewSessionView() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <button
-              onClick={sendCurrentTranscript}
-              disabled={!(interimTranscript?.trim() || finalTranscriptRef.current?.trim())}
-              className="px-3 sm:px-5 py-2 sm:py-4 rounded-xl font-semibold transition-all bg-gray-700 hover:bg-gray-600 text-white disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed"
-              title="Отправить сообщение"
-            >
-              <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span className="text-[10px] sm:text-xs font-bold ml-1">ОТПРАВИТЬ</span>
-            </button>
-            <button
               onClick={toggleListening}
-              disabled={isMuted || isSpeaking || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
+              disabled={isMuted || isSpeaking || (!isListening && !finalTranscriptRef.current?.trim() && (isProcessing || (!isUserTurnRef.current && !timeExpired)))}
               className={`px-4 sm:px-8 py-2 sm:py-4 rounded-xl transition-all font-semibold ${
                 isListening
                   ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : finalTranscriptRef.current?.trim()
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white'
                   : isMuted || isSpeaking || (!isListening && (isProcessing || (!isUserTurnRef.current && !timeExpired)))
                   ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
               }`}
-              title={isSpeaking ? 'Подождите, пока AI закончит говорить' : undefined}
+              title={isSpeaking ? 'Подождите, пока AI закончит говорить' : finalTranscriptRef.current?.trim() ? 'Отправить сообщение' : undefined}
             >
               <Mic className="w-5 h-5 sm:w-6 sm:h-6" />
               <span className="text-[10px] sm:text-xs font-bold">
-                {isListening ? 'ГОВОРЮ' : isSpeaking ? 'AI ГОВОРИТ' : 'ОТВЕТ'}
+                {isListening
+                  ? 'ГОВОРЮ'
+                  : finalTranscriptRef.current?.trim()
+                  ? 'ОТПРАВИТЬ'
+                  : isSpeaking
+                  ? 'AI ГОВОРИТ'
+                  : 'ОТВЕТ'}
               </span>
             </button>
           </div>
