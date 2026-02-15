@@ -90,7 +90,7 @@ export function InterviewSessionView() {
   const sttMediaStreamRef = useRef<MediaStream | null>(null);
   const sttInt16BufferRef = useRef<number[]>([]);
   const handleWebSocketMessageRef = useRef<((data: any) => void) | null>(null);
-  const STT_CHUNK_BYTES = 3200; // 100 ms at 16kHz mono 16-bit
+  const STT_CHUNK_BYTES = 1600; // 50 ms at 16kHz mono 16-bit (faster streaming for Google Cloud)
 
   const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
 
@@ -792,13 +792,13 @@ export function InterviewSessionView() {
       const probe = new WebSocket(wsUrl);
       const fallbackTimer = setTimeout(() => {
         if (probe.readyState !== WebSocket.OPEN) {
-          console.warn('[Frontend] Backend STT connection timeout, falling back to Web Speech API (may have issues with English terms)');
+          console.warn('[Frontend] Backend STT connection timeout, using Web Speech API');
           probe.close();
           setSttMethod('browser');
           setShowSttWarning(true);
           startSpeechRecognition(!isResume);
         }
-      }, 5000); // Increased from 2500ms to 5000ms for more reliable backend STT connection
+      }, 1000); // Quick timeout - if backend not ready in 1 sec, use browser
       probe.onopen = () => {
         clearTimeout(fallbackTimer);
         probe.close();
@@ -894,7 +894,7 @@ export function InterviewSessionView() {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });
         sttAudioContextRef.current = ctx;
         const source = ctx.createMediaStreamSource(stream);
-        const bufferSize = 4096;
+        const bufferSize = 2048; // Smaller buffer for faster real-time streaming
         const scriptNode = ctx.createScriptProcessor(bufferSize, 1, 1);
         sttScriptNodeRef.current = scriptNode;
         sttInt16BufferRef.current = [];
@@ -915,7 +915,9 @@ export function InterviewSessionView() {
             const n = Math.max(-32768, Math.min(32767, Math.floor(s * 32767)));
             sttInt16BufferRef.current.push(n & 0xff, (n >> 8) & 0xff);
           }
-          while (sttInt16BufferRef.current.length >= STT_CHUNK_BYTES) {
+          // Send chunks as they accumulate - don't wait for exact chunk size
+          // This ensures continuous real-time audio stream for Google Cloud Speech
+          if (sttInt16BufferRef.current.length >= STT_CHUNK_BYTES) {
             const chunk = new Uint8Array(sttInt16BufferRef.current.splice(0, STT_CHUNK_BYTES));
             try {
               sttWsRef.current?.send(chunk.buffer);
@@ -944,10 +946,11 @@ export function InterviewSessionView() {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : null;
         if (!data) return;
         if (data.type === 'error') {
-          console.warn('[Frontend] STT error, fallback to Web Speech API:', data.message);
+          console.warn('[Frontend] Backend STT error:', data.message);
           stopBackendStt(false); // Don't send, preserve text
-          const hadPending = finalTranscriptRef.current.trim().length > 0;
-          startSpeechRecognition(!hadPending);
+          setIsListening(false);
+          setSttMethod(null);
+          // Don't auto-restart - user must click mic button again
           return;
         }
         const text = (data.text || '').trim();
@@ -973,9 +976,11 @@ export function InterviewSessionView() {
 
     ws.onerror = () => {
       if (!useBackendSttRef.current) return;
-      console.log('[Frontend] STT WebSocket error, fallback to Web Speech API');
+      console.log('[Frontend] Backend STT WebSocket error');
       stopBackendStt(false); // Don't send, preserve text
-      startSpeechRecognition(false);
+      setIsListening(false);
+      setSttMethod(null);
+      // Don't auto-restart - user must click mic button again
     };
 
     ws.onclose = () => {
