@@ -922,21 +922,48 @@ export function InterviewSessionView() {
     }
     if (sttWsRef.current) {
       try {
+        // Send stop signal to backend STT
         sttWsRef.current.send('stop');
-        sttWsRef.current.close();
+
+        // CRITICAL FIX: Wait for final result before closing WebSocket
+        // Google Cloud Speech-to-Text sends final result after receiving 'stop' signal
+        // Wait 500ms to receive final transcription, then close and send/clear
+        const ws = sttWsRef.current;
+        setTimeout(() => {
+          try {
+            ws.close();
+          } catch (_) {}
+
+          // Now process the text after waiting for final result
+          if (shouldSend) {
+            const text = finalTranscriptRef.current.trim();
+            console.log('[Frontend] Sending text after STT stop delay:', text);
+            if (text) {
+              sendTextMessage(text);
+              finalTranscriptRef.current = '';
+            }
+            setInterimTranscript('');
+          } else {
+            const text = finalTranscriptRef.current.trim();
+            if (text) setInterimTranscript(text);
+          }
+        }, 500); // Wait 500ms for final result from Google Cloud
+
+        sttWsRef.current = null;
       } catch (_) {}
-      sttWsRef.current = null;
-    }
-    if (shouldSend) {
-      const text = finalTranscriptRef.current.trim();
-      if (text) {
-        sendTextMessage(text);
-        finalTranscriptRef.current = '';
-      }
-      setInterimTranscript('');
     } else {
-      const text = finalTranscriptRef.current.trim();
-      if (text) setInterimTranscript(text);
+      // No WebSocket, process immediately
+      if (shouldSend) {
+        const text = finalTranscriptRef.current.trim();
+        if (text) {
+          sendTextMessage(text);
+          finalTranscriptRef.current = '';
+        }
+        setInterimTranscript('');
+      } else {
+        const text = finalTranscriptRef.current.trim();
+        if (text) setInterimTranscript(text);
+      }
     }
     useBackendSttRef.current = false;
     lastSpeechActivityRef.current = null;
