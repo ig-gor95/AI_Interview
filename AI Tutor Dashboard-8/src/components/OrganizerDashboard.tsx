@@ -464,8 +464,15 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                 const candidatesCountFromResults = results.filter(r => (r as any).interviewId === session.id).length;
                 const candidatesCount = candidatesCountFromAPI ?? candidatesCountFromResults;
 
-                console.log('Interview:', session.id, 'API count:', candidatesCountFromAPI, 'Results count:', candidatesCountFromResults, 'Final count:', candidatesCount);
-                console.log('Results for this interview:', results.filter(r => (r as any).interviewId === session.id));
+                console.log('=== Interview Debug ===');
+                console.log('Interview ID:', session.id);
+                console.log('Interview position:', position);
+                console.log('API count:', candidatesCountFromAPI);
+                console.log('Results count:', candidatesCountFromResults);
+                console.log('Final count:', candidatesCount);
+                console.log('All results array:', results);
+                console.log('Filtered results:', results.filter(r => (r as any).interviewId === session.id));
+                console.log('========================');
                 
                 return (
                   <div key={session.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-300 flex flex-col h-full">
@@ -541,13 +548,13 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                           className={`flex-1 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
                             candidatesCount > 0
                               ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:shadow-lg hover:scale-[1.02]'
-                              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                              : 'bg-gray-200 text-gray-600 cursor-not-allowed border border-gray-300'
                           }`}
                         >
                           <Users className="w-4 h-4" />
                           <span>{language === 'ru' ? 'Кандидаты' : 'Candidates'}</span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                            candidatesCount > 0 ? 'bg-white/20' : 'bg-gray-200 text-gray-500'
+                            candidatesCount > 0 ? 'bg-white/20' : 'bg-gray-300 text-gray-600'
                           }`}>
                             {candidatesCount}
                           </span>

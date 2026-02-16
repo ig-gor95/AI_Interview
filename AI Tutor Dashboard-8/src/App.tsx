@@ -121,7 +121,12 @@ function AppContent() {
         };
       }).filter((s: any) => s !== null); // Remove null entries
 
+      console.log('=== SESSIONS LOADED ===');
       console.log('Transformed sessions:', transformedSessions);
+      transformedSessions.forEach(s => {
+        console.log(`Session ${s.id}: candidatesCount = ${(s as any).candidatesCount}`);
+      });
+      console.log('========================');
       setSessions(transformedSessions);
 
       // Load results for organizer
@@ -161,7 +166,12 @@ function AppContent() {
         requirementChecks: result.criterionResults || []
       }));
 
+      console.log('=== RESULTS LOADED ===');
       console.log('Transformed results:', transformedResults);
+      transformedResults.forEach(r => {
+        console.log(`Result ${r.id}: sessionId=${r.sessionId}, interviewId=${(r as any).interviewId}, name=${r.studentName}`);
+      });
+      console.log('========================');
       setResults(transformedResults);
     } catch (error) {
       console.error('Ошибка при загрузке результатов:', error);
