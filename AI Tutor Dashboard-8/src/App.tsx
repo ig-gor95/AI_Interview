@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLoca
 import { User, Session } from '@/types';
 import { getCurrentUser, login as authLogin, logout as authLogout, signup as authSignup, refreshCurrentUser } from './lib/auth';
 import { getSessions, getSessionById } from './lib/mockData';
-import { publicAPI, interviewsAPI } from './lib/api';
+import { publicAPI, interviewsAPI, resultsAPI } from './lib/api';
 import { Landing } from './components/Landing';
 import { LoginForm } from './components/LoginForm';
 import { Header } from './components/Header';
@@ -22,7 +22,9 @@ import { JotaiProvider } from './components/JotaiProvider';
 function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [results, setResults] = useState<any[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true); // Add loading state for auth check
   const navigate = useNavigate();
 
@@ -74,19 +76,19 @@ function AppContent() {
   const loadInterviews = async () => {
     try {
       setIsLoadingSessions(true);
-      const interviews = await interviewsAPI.getInterviews();
-      console.log('Loaded interviews from API:', interviews);
-      
+      // Use lightweight summary endpoint for dashboard
+      const interviews = await interviewsAPI.getInterviewsSummary();
+      console.log('Loaded interviews summary from API:', interviews);
+
       if (!interviews || interviews.length === 0) {
         console.log('No interviews found in database. Using empty array.');
         setSessions([]);
         return;
       }
-      
-      // Transform interviews to Session format for compatibility
-      // Handle both camelCase (from API) and snake_case responses
+
+      // Transform summary to Session format for compatibility
       const transformedSessions = interviews.map((interview: any) => {
-        const sessionId = interview.id || interview.id;
+        const sessionId = interview.id;
         console.log('Processing interview with ID:', sessionId, 'Type:', typeof sessionId);
         // Validate UUID format
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -96,22 +98,67 @@ function AppContent() {
         }
         return {
           id: sessionId,
-          organizerId: interview.organizerId || interview.organizer_id,
-          organizerName: interview.organizerName || interview.organizer_name,
-          params: interview.params,
-          createdAt: interview.createdAt || interview.created_at,
-          shareUrl: interview.shareUrl || interview.share_url
+          organizerId: '', // Not needed for dashboard
+          organizerName: '', // Not needed for dashboard
+          params: {
+            position: interview.position,
+            company: interview.company,
+            questions: [], // Not loaded in summary
+            must_have_requirements: [], // Not loaded in summary
+            nice_to_have_requirements: [], // Not loaded in summary
+          },
+          createdAt: interview.created_at,
+          shareUrl: interview.share_url,
+          candidatesCount: interview.candidates_count // Add candidates count
         };
       }).filter((s: any) => s !== null); // Remove null entries
-      
+
       console.log('Transformed sessions:', transformedSessions);
       setSessions(transformedSessions);
+
+      // Load results for organizer
+      await loadResults();
     } catch (error) {
       console.error('Ошибка при загрузке интервью:', error);
       // Don't fallback to mockData - set empty array instead
       setSessions([]);
     } finally {
       setIsLoadingSessions(false);
+    }
+  };
+
+  const loadResults = async () => {
+    try {
+      setIsLoadingResults(true);
+      const candidatesData = await resultsAPI.getCandidates();
+      console.log('Loaded results from API:', candidatesData);
+
+      if (!candidatesData || !candidatesData.results) {
+        console.log('No results found in database.');
+        setResults([]);
+        return;
+      }
+
+      // Transform results to match expected format
+      const transformedResults = candidatesData.results.map((result: any) => ({
+        id: result.id || result.sessionId,
+        sessionId: result.sessionId,
+        studentName: result.candidateName,
+        studentEmail: result.candidateEmail,
+        score: result.score,
+        qualityRating: result.qualityRating,
+        completedAt: result.completedAt,
+        transcript: result.transcript || [],
+        requirementChecks: result.requirementChecks || []
+      }));
+
+      console.log('Transformed results:', transformedResults);
+      setResults(transformedResults);
+    } catch (error) {
+      console.error('Ошибка при загрузке результатов:', error);
+      setResults([]);
+    } finally {
+      setIsLoadingResults(false);
     }
   };
 
@@ -225,17 +272,18 @@ function AppContent() {
   // Dashboard Page Component
   const DashboardPage = () => {
     if (!user) return <Navigate to="/" replace />;
-    
+
     return user.role === 'organizer' ? (
-      <OrganizerDashboard 
-        user={user} 
+      <OrganizerDashboard
+        user={user}
         sessions={sessions}
+        results={results}
         onRefresh={refreshSessions}
         onViewEvaluation={(sessionId) => navigate(`/evaluation/${sessionId}`)}
         onViewCandidates={(interviewId) => navigate(`/interview/${interviewId}/candidates`)}
       />
     ) : (
-      <StudentDashboard 
+      <StudentDashboard
         user={user}
         onOpenSession={(sessionId) => navigate(`/session/${sessionId}`)}
       />

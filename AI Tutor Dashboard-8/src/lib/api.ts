@@ -110,6 +110,17 @@ export const interviewsAPI = {
     return apiRequest<any[]>('/interviews');
   },
 
+  async getInterviewsSummary() {
+    return apiRequest<Array<{
+      id: string;
+      position: string;
+      company: string | null;
+      share_url: string;
+      created_at: string;
+      candidates_count: number;
+    }>>('/interviews/summary');
+  },
+
   async getInterview(id: string) {
     return apiRequest<any>(`/interviews/${id}`);
   },

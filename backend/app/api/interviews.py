@@ -43,6 +43,16 @@ class GenerateCriteriaRequest(BaseModel):
     company: str | None = None
 
 
+class InterviewSummaryResponse(BaseModel):
+    """Lightweight response for dashboard listing"""
+    id: str
+    position: str
+    company: str | None
+    share_url: str
+    created_at: str
+    candidates_count: int
+
+
 @router.post("/generate")
 async def generate_interview_content(
     request: GenerateInterviewRequest,
@@ -160,6 +170,61 @@ async def get_interviews(
             updated_at=interview.updated_at
         ))
     return result_list
+
+
+@router.get("/summary", response_model=List[InterviewSummaryResponse])
+async def get_interviews_summary(
+    current_user: User = Depends(get_current_organizer),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get lightweight summary of interviews for dashboard.
+    Only returns essential fields without loading questions, criteria, etc.
+    Includes candidates count for each interview.
+    """
+    from app.models.session import Session, SessionStatus
+
+    # Get interviews without loading relationships
+    interviews_result = await db.execute(
+        select(Interview)
+        .where(Interview.organizer_id == current_user.id)
+        .where(Interview.is_active == True)
+        .order_by(Interview.created_at.desc())
+    )
+    interviews = interviews_result.scalars().all()
+
+    if not interviews:
+        return []
+
+    # Get candidates count for all interviews in one query
+    interview_ids = [interview.id for interview in interviews]
+    candidates_count_result = await db.execute(
+        select(
+            Session.interview_id,
+            func.count(Session.id).label('count')
+        )
+        .where(Session.interview_id.in_(interview_ids))
+        .where(Session.status == SessionStatus.COMPLETED)
+        .group_by(Session.interview_id)
+    )
+
+    # Create a map of interview_id -> candidates_count
+    candidates_count_map = {row.interview_id: row.count for row in candidates_count_result}
+
+    # Build response
+    summary_list = []
+    for interview in interviews:
+        candidates_count = candidates_count_map.get(interview.id, 0)
+        summary_list.append(InterviewSummaryResponse(
+            id=str(interview.id),
+            position=interview.position or interview.title or "",
+            company=interview.company,
+            share_url=interview.share_url,
+            created_at=interview.created_at.isoformat(),
+            candidates_count=candidates_count
+        ))
+
+    return summary_list
 
 
 @router.delete("/{interview_id}", status_code=status.HTTP_204_NO_CONTENT)

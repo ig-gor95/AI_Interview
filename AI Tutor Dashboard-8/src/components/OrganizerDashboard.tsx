@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, Video, ChevronDown, TrendingUp, TrendingDown, Search, Download, Mail, Phone, QrCode, X, Send, HelpCircle, Edit2, Trash2 } from 'lucide-react';
 import { Session, SessionParams, User } from '../types/index';
-import { saveSession, getResultsByOrganizerId } from '../lib/mockData';
+import { saveSession } from '../lib/mockData';
 import { InterviewForm } from './InterviewForm';
 import { CandidatesKanban } from './CandidatesKanban';
 import { InterviewLinksManager } from './InterviewLinksManager';
@@ -13,6 +13,7 @@ import { languageAtom, useTranslation } from '../lib/i18n';
 interface Props {
   user: User;
   sessions: Session[];
+  results: any[];
   onRefresh: () => void;
   onOpenSession: (sessionId: string) => void;
   onViewEvaluation?: (sessionId: string) => void;
@@ -20,7 +21,7 @@ interface Props {
   onTabChange?: (tab: 'manage' | 'students') => void;
 }
 
-export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, onViewEvaluation }: Props) {
+export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenSession, onViewEvaluation }: Props) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
@@ -45,7 +46,6 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
   const companyDropdownRef = useRef<HTMLDivElement>(null);
 
   const userSessions = sessions.filter(s => s.organizerId === user.id);
-  const results = getResultsByOrganizerId(user.id);
 
   // Get unique positions and companies
   const positions = Array.from(new Set(userSessions.map(s => s.params.position || s.params.topic || 'AI Интервью'))).sort();
@@ -458,7 +458,8 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
               {filteredSessions.map((session) => {
                 const position = session.params.position || session.params.topic || 'AI Интервью';
-                const candidatesCount = results.filter(r => r.sessionId === session.id).length;
+                // Use candidatesCount from session if available (from API), otherwise count from results
+                const candidatesCount = (session as any).candidatesCount ?? results.filter(r => r.sessionId === session.id).length;
                 
                 return (
                   <div key={session.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-300 flex flex-col h-full">
