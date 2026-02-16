@@ -5,7 +5,7 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 import { ITRequestModal } from './ITRequestModal';
 import { useState } from 'react';
 import { useAtom } from 'jotai';
-import { languageAtom, useTranslation } from '@/lib/i18n';
+import { languageAtom, useTranslation } from '../lib/i18n';
 
 interface Props {
   onNavigate: (view: 'login-organizer' | 'login-student' | 'evaluation-demo') => void;

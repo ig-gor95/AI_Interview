@@ -1,9 +1,9 @@
 import { CheckCircle, AlertTriangle, X, Filter } from 'lucide-react';
 import { useAtom } from 'jotai';
-import { languageAtom } from '@/lib/i18n';
-import { Session } from '@/types';
-import { scoreToQualityRating, type QualityRating } from '@/lib/qualityRating';
-import { useState, useMemo } from 'react';
+import { languageAtom } from '../lib/i18n';
+import { Session } from '../types/index';
+import { scoreToQualityRating, type QualityRating } from '../lib/qualityRating';
+import { useState, useMemo, useEffect } from 'react';
 
 interface Result {
   id: string;
@@ -21,11 +21,19 @@ interface Props {
   results: Result[];
   sessions: Session[];
   onViewEvaluation?: (sessionId: string) => void;
+  initialPosition?: string;
 }
 
-export function CandidatesKanban({ results, sessions, onViewEvaluation }: Props) {
+export function CandidatesKanban({ results, sessions, onViewEvaluation, initialPosition }: Props) {
   const [language] = useAtom(languageAtom);
-  const [selectedPosition, setSelectedPosition] = useState<string>('all');
+  const [selectedPosition, setSelectedPosition] = useState<string>(initialPosition || 'all');
+
+  // Update selectedPosition when initialPosition changes
+  useEffect(() => {
+    if (initialPosition) {
+      setSelectedPosition(initialPosition);
+    }
+  }, [initialPosition]);
 
   const translations = {
     ru: {
@@ -204,84 +212,14 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation }: Props)
   return (
     <div className="bg-gray-50 min-h-screen p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Filter Header - Premium Design */}
+        {/* Title */}
         <div className="mb-6">
-          {/* Title */}
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">{t.filterByPosition}</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {filteredResults.length} {t.candidates}
-              </p>
-            </div>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm">
-            <div className="flex flex-wrap gap-2">
-              {/* All Positions Pill */}
-              <button
-                onClick={() => setSelectedPosition('all')}
-                className={`
-                  px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200
-                  flex items-center gap-2
-                  ${selectedPosition === 'all'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                  }
-                `}
-              >
-                <span>{t.allPositions}</span>
-                <span className={`
-                  px-2 py-0.5 rounded-full text-xs font-bold
-                  ${selectedPosition === 'all'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-700'
-                  }
-                `}>
-                  {results.length}
-                </span>
-              </button>
-
-              {/* Position Pills */}
-              {positions.map(position => {
-                const count = results.filter(r => {
-                  const session = sessions.find(s => s.id === r.sessionId);
-                  if (!session) return false;
-                  const pos = session.params.position || session.params.topic || 'Не указана';
-                  return pos === position;
-                }).length;
-                
-                const isSelected = selectedPosition === position;
-                
-                return (
-                  <button
-                    key={position}
-                    onClick={() => setSelectedPosition(position)}
-                    className={`
-                      px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200
-                      flex items-center gap-2
-                      ${isSelected
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                      }
-                    `}
-                  >
-                    <span className="truncate max-w-[200px]">{position}</span>
-                    <span className={`
-                      px-2 py-0.5 rounded-full text-xs font-bold flex-shrink-0
-                      ${isSelected
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-200 text-gray-700'
-                      }
-                    `}>
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-900">
+            {language === 'ru' ? 'Кандидаты' : 'Candidates'}
+          </h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {filteredResults.length} {t.candidates}
+          </p>
         </div>
 
         {/* Kanban Board */}

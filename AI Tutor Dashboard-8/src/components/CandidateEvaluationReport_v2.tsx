@@ -1,14 +1,14 @@
 import { useState, useRef } from 'react';
-import { CheckCircle2, AlertCircle, X, ArrowLeft, Play, Pause, FileText, Bot, User, Code, Layers, Server, Volume2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowLeft, Play, Pause, FileText, Bot, User, Code, Layers, Server, Volume2 } from 'lucide-react';
 import { useAtom } from 'jotai';
-import { languageAtom } from '@/lib/i18n';
+import { languageAtom } from '../lib/i18n';
 
-// Modern design with loading states support
+// EXACT copy from ITTechnicalEvaluation.tsx - NO SCORES, only Kanban statuses
 
 interface RequirementCheck {
   requirement: string;
   fact: string;
-  status: 'met' | 'not_met' | 'partial' | 'loading';
+  status: 'met' | 'not_met' | 'partial';
 }
 
 interface EvaluationCriterion {
@@ -57,8 +57,6 @@ interface Props {
   }>;
   simulation?: SimulationScenario;
   audioUrl?: string;
-  isLoadingTranscript?: boolean;
-  isEvaluating?: boolean;
   onBack?: () => void;
 }
 
@@ -72,8 +70,6 @@ export function CandidateEvaluationReport_v2({
   transcript,
   simulation,
   audioUrl,
-  isLoadingTranscript,
-  isEvaluating,
   onBack,
 }: Props) {
   const [language] = useAtom(languageAtom);
@@ -109,8 +105,6 @@ export function CandidateEvaluationReport_v2({
       aiInterviewer: 'AI Интервьюер',
       durationValue: '1 час 15 мин (AI-фильтр + Live Coding)',
       recordingLabel: 'Запись интервью',
-      evaluating: 'AI анализирует интервью...',
-      evaluatingDesc: 'Оценка критериев будет готова через 10-30 секунд',
     },
     en: {
       backButton: 'Back to List',
@@ -139,8 +133,6 @@ export function CandidateEvaluationReport_v2({
       aiInterviewer: 'AI Interviewer',
       durationValue: '1 hour 15 min (AI filter + Live Coding)',
       recordingLabel: 'Interview Recording',
-      evaluating: 'AI is analyzing the interview...',
-      evaluatingDesc: 'Evaluation will be ready in 10-30 seconds',
     },
   }[language];
 
@@ -174,8 +166,7 @@ export function CandidateEvaluationReport_v2({
   };
 
   const confirmedPoints = requirementChecks?.filter(r => r.status === 'met') || [];
-  const attentionPoints = requirementChecks?.filter(r => r.status !== 'met' && r.status !== 'loading') || [];
-  const loadingPoints = requirementChecks?.filter(r => r.status === 'loading') || [];
+  const attentionPoints = requirementChecks?.filter(r => r.status !== 'met') || [];
 
   const formattedDate = new Date().toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
     day: 'numeric',
@@ -213,13 +204,13 @@ export function CandidateEvaluationReport_v2({
               {t.backButton}
             </button>
           )}
-
+          
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 mb-1">
                 {t.title}
               </h1>
-
+              
               <div className="mt-4 space-y-1">
                 <div className="flex items-center gap-3 text-sm">
                   <span className="text-gray-600">{t.candidate}</span>
@@ -248,15 +239,13 @@ export function CandidateEvaluationReport_v2({
                 <FileText className="w-4 h-4" />
                 {t.fullDialog}
               </button>
-              {audioUrl && (
-                <button
-                  onClick={handlePlayPause}
-                  className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                  {t.listen}
-                </button>
-              )}
+              <button
+                onClick={handlePlayPause}
+                className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
+              >
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {t.listen}
+              </button>
             </div>
           </div>
         </div>
@@ -264,18 +253,7 @@ export function CandidateEvaluationReport_v2({
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-6 py-8">
-
-        {/* AI Evaluating Banner */}
-        {isEvaluating && (
-          <div className="mb-6 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
-            <div>
-              <p className="text-sm font-medium text-blue-900">{t.evaluating}</p>
-              <p className="text-xs text-blue-700">{t.evaluatingDesc}</p>
-            </div>
-          </div>
-        )}
-
+        
         {/* ========== 1. СТАТУС И ВЕРДИКТ (БЕЗ БАЛЛОВ) ========== */}
         <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
           {/* Только статус - БЕЗ баллов */}
@@ -299,100 +277,77 @@ export function CandidateEvaluationReport_v2({
         </div>
 
         {/* ========== 2. КЛЮЧЕВЫЕ СИГНАЛЫ (Technical Signals) ========== */}
-        {requirementChecks && requirementChecks.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-5">{t.keySignals}</h2>
-
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Что подтвердилось */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  <h3 className="font-semibold text-gray-900">{t.confirmed}</h3>
-                </div>
-                <ul className="space-y-2">
-                  {confirmedPoints.map((point, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                      <span className="text-green-600 mt-0.5">✓</span>
-                      <div>
-                        <span className="font-semibold">{point.requirement}:</span>{' '}
-                        <span>{point.fact}</span>
-                      </div>
-                    </li>
-                  ))}
-                  {loadingPoints.map((point, index) => (
-                    <li key={`loading-${index}`} className="flex items-start gap-2 text-sm text-gray-700">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-semibold">{point.requirement}:</span>{' '}
-                        <span className="inline-block h-4 w-48 bg-gray-200 animate-pulse rounded" />
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-5">{t.keySignals}</h2>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Что подтвердилось */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <h3 className="font-semibold text-gray-900">{t.confirmed}</h3>
               </div>
+              <ul className="space-y-2">
+                {confirmedPoints.map((point, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-green-600 mt-0.5">✓</span>
+                    <span>{point.requirement}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-              {/* На что обратить внимание */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <AlertCircle className="w-5 h-5 text-yellow-600" />
-                  <h3 className="font-semibold text-gray-900">{t.attention}</h3>
-                </div>
-                <ul className="space-y-2">
-                  {attentionPoints.map((point, index) => (
-                    <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
-                      <span className="text-yellow-600 mt-0.5">⚠</span>
-                      <div>
-                        <span className="font-semibold">{point.requirement}:</span>{' '}
-                        <span className={
-                          point.status === 'partial' ? 'text-amber-800' :
-                          point.status === 'not_met' ? 'text-red-800' :
-                          'text-gray-700'
-                        }>{point.fact}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+            {/* На что обратить внимание */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <AlertCircle className="w-5 h-5 text-yellow-600" />
+                <h3 className="font-semibold text-gray-900">{t.attention}</h3>
               </div>
+              <ul className="space-y-2">
+                {attentionPoints.map((point, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                    <span className="text-yellow-600 mt-0.5">⚠</span>
+                    <span>{point.requirement}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-        )}
+        </div>
 
         {/* ========== 3. ОТВЕТЫ НА ТЕХНИЧЕСКИЕ ВОПРОСЫ ========== */}
-        {technicalQuestions.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-5">{t.technicalQuestions}</h2>
-
-            <div className="space-y-5">
-              {technicalQuestions.map((item, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-lg p-5 hover:border-blue-200 transition-colors">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                      {idx + 1}
-                    </div>
-                    <p className="text-sm font-semibold text-gray-900 flex-1">{item.question}</p>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-5">{t.technicalQuestions}</h2>
+          
+          <div className="space-y-5">
+            {technicalQuestions.map((item, idx) => (
+              <div key={idx} className="border border-gray-200 rounded-lg p-5 hover:border-blue-200 transition-colors">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+                    {idx + 1}
                   </div>
-
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 ml-10">
-                    <p className="text-sm text-gray-800"><strong>{t.answer}</strong> {item.answer}</p>
-                  </div>
-
-                  {item.assessment && (
-                    <div className="ml-10">
-                      <p className="text-sm text-green-700 font-medium">✓ {language === 'ru' ? 'Экспертная оценка:' : 'Expert Evaluation:'} {item.assessment}</p>
-                    </div>
-                  )}
+                  <p className="text-sm font-semibold text-gray-900 flex-1">{item.question}</p>
                 </div>
-              ))}
-            </div>
+                
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-3 ml-10">
+                  <p className="text-sm text-gray-800"><strong>{t.answer}</strong> {item.answer}</p>
+                </div>
+                
+                {item.assessment && (
+                  <div className="ml-10">
+                    <p className="text-sm text-green-700 font-medium">✓ {language === 'ru' ? 'Экспертная оценка:' : 'Expert Evaluation:'} {item.assessment}</p>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* ========== 4. АНАЛИТИКА КОМПЕТЕНЦИЙ (Senior Level) ========== */}
         {competencies.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 p-8 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-5">{t.competencies}</h2>
-
+            
             <div className="grid sm:grid-cols-2 gap-4">
               {competencies.map((comp, idx) => {
                 const Icon = comp.icon;
@@ -514,7 +469,7 @@ export function CandidateEvaluationReport_v2({
                 >
                   <Pause className="w-5 h-5" />
                 </button>
-
+                
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
                     <span>{t.recordingLabel} • {candidateName}</span>
