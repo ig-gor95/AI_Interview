@@ -460,7 +460,12 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                 const position = session.params.position || session.params.topic || 'AI Интервью';
                 // Use candidatesCount from session if available (from API), otherwise count from results
                 // Note: session here is Interview template, so we need to filter by interviewId (not sessionId)
-                const candidatesCount = (session as any).candidatesCount ?? results.filter(r => (r as any).interviewId === session.id).length;
+                const candidatesCountFromAPI = (session as any).candidatesCount;
+                const candidatesCountFromResults = results.filter(r => (r as any).interviewId === session.id).length;
+                const candidatesCount = candidatesCountFromAPI ?? candidatesCountFromResults;
+
+                console.log('Interview:', session.id, 'API count:', candidatesCountFromAPI, 'Results count:', candidatesCountFromResults, 'Final count:', candidatesCount);
+                console.log('Results for this interview:', results.filter(r => (r as any).interviewId === session.id));
                 
                 return (
                   <div key={session.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-300 flex flex-col h-full">

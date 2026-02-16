@@ -68,12 +68,19 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation, initialP
 
   // Filter results by selected position
   const filteredResults = useMemo(() => {
+    console.log('CandidatesKanban - All results:', results);
+    console.log('CandidatesKanban - Sessions:', sessions);
+    console.log('CandidatesKanban - Selected position:', selectedPosition);
+
     if (selectedPosition === 'all') {
       return results;
     }
-    
+
+    // Since results are already filtered by interviewId before passing to this component,
+    // and we only pass one session (the interview template), we can use that directly
     return results.filter(result => {
-      const session = sessions.find(s => s.id === result.sessionId);
+      // Get position from the first session (interview template)
+      const session = sessions[0];
       if (!session) return false;
       const position = session.params.position || session.params.topic || 'Не указана';
       return position === selectedPosition;
@@ -150,7 +157,7 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation, initialP
   // Convert results to candidates
   const candidates = filteredResults.map(result => {
     const rating = getNumericRating(result);
-    
+
     return {
       id: result.id,
       name: result.studentName,
@@ -161,10 +168,18 @@ export function CandidatesKanban({ results, sessions, onViewEvaluation, initialP
     };
   });
 
+  console.log('CandidatesKanban - Mapped candidates:', candidates);
+
   // Group candidates by verdict
   const recommendedCandidates = candidates.filter(c => c.verdict === 'recommended');
   const possibleCandidates = candidates.filter(c => c.verdict === 'possible');
   const notRecommendedCandidates = candidates.filter(c => c.verdict === 'not_recommended');
+
+  console.log('CandidatesKanban - Grouped:', {
+    recommended: recommendedCandidates.length,
+    possible: possibleCandidates.length,
+    notRecommended: notRecommendedCandidates.length
+  });
 
   const renderCard = (candidate: typeof candidates[0]) => {
     // v2024: Professional white cards with lucide icons
