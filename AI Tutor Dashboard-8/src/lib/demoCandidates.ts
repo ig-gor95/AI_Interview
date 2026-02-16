@@ -1,6 +1,8 @@
 // Mock данные для демонстрации разных типов кандидатов
 
-export const demoCandidatesData = {
+import type { Language } from './i18n';
+
+const demoCandidatesRu = {
   'ready-1': {
     name: 'Анна Соколова',
     position: 'Официант',
@@ -160,3 +162,171 @@ export const demoCandidatesData = {
     }
   }
 };
+
+const demoCandidatesEn = {
+  'ready-1': {
+    name: 'Anna Sokolova',
+    position: 'Waiter',
+    completedAt: '2026-01-15T14:30:00',
+    status: 'ready',
+    questionsAnalysis: {
+      greeting: {
+        question: 'Tell me about yourself and your experience working with guests',
+        answer: 'Hello! My name is Anna, I\'m 24 years old. I worked as a waiter at "Panorama" restaurant for two years. I had experience working with high customer flow, especially on weekends. I learned to serve tables quickly, remember orders, and always try to create a pleasant atmosphere for guests. I enjoy communicating with people and helping them have a comfortable time.',
+        analysis: 'Structured response with specific examples of experience. Mentions establishment name, duration of work, and specifics. Shows enthusiasm for working with people.'
+      },
+      experience: {
+        question: 'Describe a situation when you had to deal with an unhappy guest',
+        answer: 'There was a case when a guest ordered a medium steak but received medium-well. He was clearly upset. I immediately apologized without arguing or making excuses. I asked if he was willing to wait for a new steak or would prefer something else. He agreed to wait. I informed the chef and asked to prepare it with priority, and while the guest waited, I brought a complimentary bruschetta from the chef. In the end, the guest was satisfied and even left a good tip.',
+        analysis: 'Detailed description of a specific situation with a clear sequence of actions. Demonstrates problem acknowledgment, empathy, initiative, and ability to compensate for inconvenience.'
+      },
+      teamwork: {
+        question: 'How do you work in a team during busy moments?',
+        answer: 'During peak hours when the hall is full, coordination is very important. I always alert colleagues if I see they need help - for example, I\'ll deliver their order if I\'m passing by. Or I\'ll cover if someone is delayed from the kitchen. Once my colleague felt unwell, and another waiter and I split her tables. The main thing is not to panic and support each other.',
+        analysis: 'Specific examples of mutual assistance. Understanding of teamwork. Proactivity and willingness to help colleagues.'
+      }
+    },
+    simulationAnalysis: {
+      role: 'Restaurant guest dissatisfied with cold dish',
+      scenario: 'Guest ordered a hot dish, but it arrived lukewarm. He is clearly upset and wants to complain.',
+      behaviorSummary: 'Anna immediately expressed sincere regret and did not try to make excuses. Asked if she could take the dish and bring a new one. Offered to replace with another dish if the guest didn\'t want to wait. Apologized on behalf of the establishment.',
+      strengths: [
+        'Acknowledged problem without excuses',
+        'Offered specific solution options',
+        'Maintained calm and politeness',
+        'Took initiative'
+      ],
+      quotes: [
+        'I\'m very sorry this happened. I\'ll take the dish now and ask the chef to prepare a new one, it will take 10 minutes.',
+        'Or if you don\'t want to wait, I can offer another dish that cooks faster.'
+      ],
+      recommendation: 'Anna demonstrates confident command of service standards and ability to maintain professionalism in stressful situations. Ready for work.'
+    }
+  },
+  'not-ready-1': {
+    name: 'Dmitry Petrov',
+    position: 'Barista',
+    completedAt: '2026-01-14T11:00:00',
+    status: 'not-ready',
+    questionsAnalysis: {
+      greeting: {
+        question: 'Tell me about yourself and your customer service experience',
+        answer: 'Well... My name is Dima. I\'m 19 years old. I\'m studying at university. I used to work as a courier, delivering food. And I communicated a bit with customers when delivering orders.',
+        analysis: 'Very brief answer without details. No mention of specific cafe or coffee experience. Uncertain speech with filler words ("well"). Customer service experience is minimal and indirect.'
+      },
+      experience: {
+        question: 'What would you do if a customer complains about coffee quality?',
+        answer: 'Probably... I would apologize? And say I can make new coffee. Or I would call the senior if I don\'t know what to do myself.',
+        analysis: 'Hypothetical answer without practical examples. No clear action plan. Mentioning "call the senior" shows lack of confidence in own abilities. No attempt to find out the reason for dissatisfaction.'
+      },
+      coffee: {
+        question: 'What do you know about preparing coffee drinks?',
+        answer: 'Well, I drink coffee every day. I know there\'s cappuccino, latte, espresso. Cappuccino has a lot of milk. Espresso is a small portion of strong coffee.',
+        analysis: 'Consumer-level knowledge, not professional. No mention of preparation technique, proportions, temperature. No experience with coffee machine.'
+      }
+    },
+    simulationAnalysis: {
+      role: 'Coffee shop customer complaining about cold cappuccino',
+      scenario: 'Customer received cappuccino, but the drink is not hot enough. He is clearly dissatisfied.',
+      behaviorSummary: 'Dmitry became confused and apologized several times but didn\'t offer a concrete solution immediately. Asked "what should I do?" instead of taking initiative. After a pause, offered to make a new drink.',
+      concerns: [
+        'Uncertainty and confusion',
+        'No clear action algorithm',
+        'Asks back instead of acting',
+        'Long pauses in responses'
+      ],
+      quotes: [
+        'Sorry... Really very sorry... What should I... what should I do?',
+        'Well okay, I can make you a new cappuccino.'
+      ],
+      recommendation: 'Dmitry demonstrates insufficient customer service experience and low confidence. Requires training in service standards and coffee equipment operation. Internship under supervision of experienced barista recommended before independent work.'
+    }
+  },
+  'not-ready-2': {
+    name: 'Elena Ivanova',
+    position: 'Call Center Operator',
+    completedAt: '2026-01-13T16:45:00',
+    status: 'not-ready',
+    questionsAnalysis: {
+      greeting: {
+        question: 'Tell me about yourself and your customer service experience',
+        answer: 'Elena. 26 years old. Worked at store cashier.',
+        analysis: 'Extremely short answer. No details about experience, duties, achievements. Lacks initiative to expand answer.'
+      },
+      communication: {
+        question: 'How do you communicate with dissatisfied customers?',
+        answer: 'Politely. I try to help.',
+        analysis: 'One-word answer without specifics. No examples, techniques, approaches. Doesn\'t explain how exactly she helps.'
+      },
+      stress: {
+        question: 'How do you cope with stress at work?',
+        answer: 'I cope normally. Don\'t panic.',
+        analysis: 'General phrases without examples. Doesn\'t describe specific methods or situations. Formal answer.'
+      }
+    },
+    simulationAnalysis: {
+      role: 'Customer who cannot find their order on the website',
+      scenario: 'Customer calls support, frustrated that they cannot track their order. Need to help solve the problem.',
+      behaviorSummary: 'Elena answered very briefly, asked closed questions requiring one-word answers. Showed no empathy, made no attempt to calm the customer. Communication was dry and formal.',
+      concerns: [
+        'Minimal verbal interaction',
+        'Lack of empathy and understanding',
+        'No attempts to defuse the situation',
+        'Closed questions instead of open ones'
+      ],
+      quotes: [
+        'Order number?',
+        'Understood. Will check now.',
+        'System is loading.'
+      ],
+      recommendation: 'Elena demonstrates weak communication skills. Lacks active listening skill and dialogue building. Requires training in customer communication techniques, empathy development, and work on expanding responses. Not ready for independent work on the line.'
+    }
+  },
+  'not-ready-3': {
+    name: 'Maxim Novikov',
+    position: 'Hotel Administrator',
+    completedAt: '2026-01-12T10:15:00',
+    status: 'not-ready',
+    questionsAnalysis: {
+      greeting: {
+        question: 'Tell me about yourself and your experience in hospitality',
+        answer: 'My name is Maxim, I\'m 28 years old. I completed hotel business courses. Haven\'t worked in a hotel yet, but really want to start. I\'m responsible and diligent.',
+        analysis: 'Has education but no practical experience. Answer contains general qualities without supporting examples.'
+      },
+      conflict: {
+        question: 'How would you handle a conflict situation with a guest?',
+        answer: 'I would try to solve the problem. I think I need to listen to the guest and understand what bothers them. And then... well, depends on the situation.',
+        analysis: 'Theoretical answer without structure. No specific action plan. Phrase "depends on the situation" shows lack of ready algorithms.'
+      },
+      priorities: {
+        question: 'How do you prioritize when you need to solve several tasks simultaneously?',
+        answer: 'I try to do everything in order. First one thing, then another. But if something is urgent, then of course I\'ll handle it immediately.',
+        analysis: 'No systematic approach to prioritization. General phrases without methodology.'
+      }
+    },
+    simulationAnalysis: {
+      role: 'Aggressive hotel guest demanding money back',
+      scenario: 'Guest claims the room was dirty and demands full refund for the stay. He raises his voice and threatens to leave negative review.',
+      behaviorSummary: 'Maxim noticeably became flustered when the guest raised his voice. Started making excuses and promising that "this won\'t happen again". Repeated the same phrases several times. Could not offer a concrete solution other than "I\'ll report to management".',
+      concerns: [
+        'Loss of composure in conflict',
+        'Defensive position instead of solution',
+        'No action plan',
+        'Shifting responsibility to management'
+      ],
+      quotes: [
+        'I didn\'t know... Sorry, I didn\'t think this could happen...',
+        'This shouldn\'t have happened, forgive me...',
+        'I need to consult with the manager, I can\'t decide myself.'
+      ],
+      recommendation: 'Maxim is not ready to work with conflict situations and stressful customers. Lacks stress resistance and confidence in decision-making. Requires conflict management training, practice of standard scenarios, and development of maintaining calm. Experienced mentor needed at initial stage.'
+    }
+  }
+};
+
+export const getDemoCandidates = (language: Language) => {
+  return language === 'en' ? demoCandidatesEn : demoCandidatesRu;
+};
+
+// Экспорт по умолчанию для обратной совместимости
+export const demoCandidatesData = demoCandidatesRu;

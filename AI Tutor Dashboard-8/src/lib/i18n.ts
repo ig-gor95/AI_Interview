@@ -41,6 +41,33 @@ export interface Translations {
   choice: {
     badge: string;
     title: string;
+    description: string;
+    stage1Badge: string;
+    stage1Title: string;
+    stage1Description: string;
+    stage1Feature1: string;
+    stage1Feature2: string;
+    stage1Feature3: string;
+    stage1Duration: string;
+    stage1ZoomTitle: string;
+    stage1AIRole: string;
+    stage1Question: string;
+    stage2Badge: string;
+    stage2Title: string;
+    stage2Description: string;
+    stage2Feature1: string;
+    stage2Feature2: string;
+    stage2Feature3: string;
+    stage2Duration: string;
+    stage2ZoomTitle: string;
+    stage2ExpertRole: string;
+    stage2TopicLabel: string;
+    stage2Topic: string;
+    stage2Button: string;
+    thenLabel: string;
+    durationLabel: string;
+    resultBadge: string;
+    resultDescription: string;
     massCard: {
       title: string;
       subtitle: string;
@@ -436,8 +463,6 @@ export interface Translations {
     testInterviewsDesc: string;
     candidatesStatsTitle: string;
     candidatesStatsDesc: string;
-    loadingCandidates: string;
-    loadingCandidatesDesc: string;
     createFirstInterview: string;
     createFirstInterviewDesc: string;
     createButton: string;
@@ -454,15 +479,12 @@ export interface Translations {
     qrCodeTitle: string;
     qrCodeDesc: string;
     interviewLink: string;
-    copyLink: string;
     downloadQR: string;
     print: string;
     qrCodePlacement: string;
     uniqueLinks: string;
     testLink: string;
     copied: string;
-    candidatesButton: string;
-    backToInterviews: string;
     passInterview: string;
     testLabel: string;
     beginnerLevel: string;
@@ -516,6 +538,18 @@ export interface Translations {
     addQuestion: string;
     addQuestionPlaceholder: string;
     recommended: string;
+    // Evaluation Criteria Section
+    evaluationCriteriaTitle: string;
+    evaluationCriteriaDesc: string;
+    generateWithAI: string;
+    mustHaveTitle: string;
+    mustHaveSubtitle: string;
+    niceToHaveTitle: string;
+    niceToHaveSubtitle: string;
+    addRequirement: string;
+    requirementPlaceholder: string;
+    mustHaveTag: string;
+    niceToHaveTag: string;
     dynamicQuestionsTitle: string;
     dynamicQuestionsDesc: string;
     simulationTitle: string;
@@ -538,18 +572,6 @@ export interface Translations {
     alertQuestions: string;
     alertJobDescription: string;
     successMessage: string;
-    errorGenerate: string;
-    evaluationCriteriaTitle: string;
-    evaluationCriteriaDesc: string;
-    generateWithAI: string;
-    mustHaveTitle: string;
-    mustHaveSubtitle: string;
-    mustHaveTag: string;
-    niceToHaveTitle: string;
-    niceToHaveSubtitle: string;
-    niceToHaveTag: string;
-    requirementPlaceholder: string;
-    addRequirement: string;
   };
 
   // Candidate Evaluation
@@ -809,6 +831,13 @@ export interface Translations {
     candidate4Concern2: string;
     candidate4Concern3: string;
   };
+  
+  // Report Types
+  reportTypes: {
+    title: string;
+    autoRating: string;
+    techAudit: string;
+  };
 }
 
 export const translations: Record<Language, Translations> = {
@@ -832,14 +861,41 @@ export const translations: Record<Language, Translations> = {
       ctaSecondary: 'Войти в кабинет организатора',
       stat1Value: '92%',
       stat1Label: 'Точность оценки кандидатов',
-      stat2Value: '5-7 мин',
+      stat2Value: '10 мин',
       stat2Label: 'Среднее время интервью',
       stat3Value: '24/7',
       stat3Label: 'Автоматический скрининг',
     },
     choice: {
       badge: 'Выберите направление',
-      title: 'Два формата найма — одна платформа',
+      title: 'Два этапа для идеального найма',
+      description: 'Сначала AI фильтрует базовые навыки через Zoom-конференцию, затем для IT-вакансий senior/lead эксперты проводят живое техническое интервью',
+      stage1Badge: 'ЭТАП 1',
+      stage1Title: 'AI-скрининг через видеоконференцию',
+      stage1Description: 'Искусственный интеллект проводит полноценное интервью в Zoom-подобном интерфейсе. Вместо живого рекрутера — умный AI, который оценивает коммуникацию, опыт и мотивацию.',
+      stage1Feature1: 'Видеоконференция 24/7 без участия HR',
+      stage1Feature2: 'AI вместо человека — та же атмосфера, но без затрат времени',
+      stage1Feature3: 'Автоматическая оценка и отчет сразу после интервью',
+      stage1Duration: '7-10 минут',
+      stage1ZoomTitle: 'AI-интервью',
+      stage1AIRole: 'AI Рекрутер',
+      stage1Question: 'Расскажите о вашем опыте работы с клиентами. Как вы справляетесь с конфликтными ситуациями?',
+      stage2Badge: 'ЭТАП 2 • ДЛЯ IT',
+      stage2Title: 'Живое техническое собеседование',
+      stage2Description: 'Senior и Lead эксперты из BigTech компаний проводят глубокую техническую проверку в реальном времени. Code review, system design, архитектурные решения.',
+      stage2Feature1: 'Живые эксперты из крупных компаний',
+      stage2Feature2: 'Проверка hard skills: code review, алгоритмы, архитектура',
+      stage2Feature3: 'Детальный отчет с рекомендациями для найма',
+      stage2Duration: '45-60 минут',
+      stage2ZoomTitle: 'Техническое интервью',
+      stage2ExpertRole: 'Senior Engineer, ex-BigTech',
+      stage2TopicLabel: 'Обсуждаемая тема',
+      stage2Topic: 'System Design: проектирование highload API',
+      stage2Button: 'Подключить экспертов',
+      thenLabel: 'Затем',
+      durationLabel: 'Длительность',
+      resultBadge: 'Результат: готовые кандидаты для финального найма',
+      resultDescription: 'Вы получаете проверенных специалистов с детальными отчётами',
       massCard: {
         title: 'Mass Recruitment',
         subtitle: 'Автоматизация массовки',
@@ -853,7 +909,7 @@ export const translations: Record<Language, Translations> = {
         title: 'IT Recruitment',
         subtitle: 'Экспертный тех-отсев',
         feature1: 'AI-прескрининг + Живое тех-интервью с Senior-экспертом',
-        feature2: 'Эксперты с опытом работы в Яндекс, VK, Т-Банк',
+        feature2: 'Эксперты с опытом работы в крупных компаниях',
         feature3: 'Глубокий аудит Hard Skills',
         price: 'индивидуальный расчет',
         button: 'Подключить IT-экспертов',
@@ -879,28 +935,28 @@ export const translations: Record<Language, Translations> = {
     },
     experts: {
       badge: 'Кто проверяет',
-      title: 'IT-интервьюеры — это техлиды из топовых компаний',
+      title: 'IT-интервьюеры — это техлиды из крупных компаний',
       subtitle: 'Проверяют Hard Skills и дают развернутую обратную связь',
       expert1Name: 'Алексей Смирнов',
       expert1Role: 'Senior Backend Engineer',
-      expert1Company: 'Яндекс',
+      expert1Company: 'ex-BigTech',
       expert2Name: 'Мария Петрова',
       expert2Role: 'Tech Lead Frontend',
-      expert2Company: 'Сбер',
+      expert2Company: 'ex-BigTech',
       expert3Name: 'Дмитрий Козлов',
       expert3Role: 'Principal Architect',
-      expert3Company: 'Т-Банк',
+      expert3Company: 'ex-BigTech',
     },
     demo: {
       aiInterview: 'AI-Интервью',
-      recruiterName: 'София',
+      recruiterName: 'ScreenMe',
       recruiterRole: 'AI Рекрутер',
       you: 'Вы',
       candidate: 'Кандидат',
       analyzing: 'Анализирую...',
-      speaking: 'София говорит',
+      speaking: 'ScreenMe говорит',
       youSpeaking: 'Вы отвечаете',
-      greeting: 'Здравствуйте! Меня зовут София, я проведу с вами интервью. Расскажите, пожалуйста, о вашем опыте работы с клиентами.',
+      greeting: 'Здравствуйте! Меня зовут ScreenMe, я проведу с вами интервью. Расскажите, пожалуйста, о вашем опыте работы с клиентами.',
       listening1: 'Я работал в кафе...',
       question1: 'Отлично! А с какими сложными ситуациями вы сталкивались при общении с гостями?',
       listening2: 'Был случай с недовольным клиентом...',
@@ -911,9 +967,9 @@ export const translations: Record<Language, Translations> = {
     journey: {
       badge: 'Путь использования',
       title: 'От настройки до найма за 4 шага',
-      description: 'Простой и понятный процесс автоматизации найма сотрудников',
+      description: 'Полный цикл автоматизации рекрутинга с экспертной проверкой для IT',
       step1Badge: 'ШАГ 1',
-      step1Title: 'Настройте сценарий под ваш стек или вакансию',
+      step1Title: 'Настройте сценарий интервью',
       step1Description: 'Настройте ИИ под любую задачу: от оценки сервисных навыков (кейс "сложный клиент") до глубокого тех-скрининга (Code Review по вашему стеку: Python, Go, SQL и др.)',
       step1Time: 'Занимает 2-3 минуты',
       step1Questions: 'Список вопросов',
@@ -940,7 +996,7 @@ export const translations: Record<Language, Translations> = {
       step3Voice: 'Голосовой диалог в реальном времени',
       step3Scenario: 'Ролевая симуляция клиента',
       step3Analysis: 'Автоматический анализ ответов',
-      step3Time: 'Среднее время: 5-7 минут',
+      step3Time: 'Среднее время: 10 минут',
       step4Badge: 'ШАГ 4',
       step4Title: 'Получите экспертный отчет и рейтинг',
       step4Description: 'Авто-рейтинг для массовых позиций (готовность к работе, софт-скиллы) или тех-аудит для IT (детальная матрица компетенций). Для сложных вакансий на этом этапе подключается наш эксперт, который проводит финальное живое интервью на основе данных от ИИ.',
@@ -1036,6 +1092,11 @@ export const translations: Record<Language, Translations> = {
       feature2: 'Без холодных звонков',
       feature3: 'Без ожидания ответов',
     },
+    reportTypes: {
+      title: 'Типы отчетов:',
+      autoRating: 'Авто-рейтинг (массовые позиции)',
+      techAudit: 'Тех-аудит (IT специалисты)',
+    },
     step3Details: {
       aiAssistant: 'AI АССИСТЕНТ',
       conducting: 'Веду интервью...',
@@ -1051,12 +1112,12 @@ export const translations: Record<Language, Translations> = {
       topCandidates: 'ТОП-КАНДИДАТЫ',
       clearFormulations: 'Понятные формулировки',
       expertReview: 'Экспертная проверка • 1ч 15мин',
-      candidateName1: 'Анна Петрова',
-      candidateName2: 'Иван Сидоров',
-      candidateName3: 'Мария Иванова',
-      scoreExcellent: 'Отлично',
-      scoreGood: 'Хорошо',
-      scoreAverage: 'Средне',
+      candidateName1: 'Алексей Волков',
+      candidateName2: 'Дмитрий Козлов',
+      candidateName3: 'Сергей Морозов',
+      scoreExcellent: 'Рекомендован',
+      scoreGood: 'Требуется уточнение',
+      scoreAverage: 'Не подходит',
       freeStartBold: 'Начните бесплатно:',
       freeStartText: 'Первые 10 интервью в подарок. Оцените качество отбора, увидьте детальную аналитику и почувствуйте разницу уже на первой неделе.',
     },
@@ -1101,7 +1162,7 @@ export const translations: Record<Language, Translations> = {
       q1: 'Как эксперты проверяют Hard Skills у IT-кандидатов?',
       a1: 'IT-эксперты из BigTech компаний проводят живое техническое интервью: code review, system design, алгоритмические задачи. Каждый эксперт специализируется на своем стеке технологий и имеет опыт 5+ лет.',
       q2: 'Можно ли обмануть AI на массовом интервью?',
-      a2: 'Нет. AI ана��изирует не только текст ответов, но и интонацию, паузы, уверенность речи, логичность изложения. Система детектирует заготовленные ответы и несоответствие контексту вопроса.',
+      a2: 'Нет. AI анализирует не только текст ответов, но и интонацию, паузы, уверенность речи, логичность изложения. Система детектирует заготовленные ответы и несоответствие контексту вопроса.',
       q3: 'Чем отличается массовое интервью от IT-интервью?',
       a3: 'Массовое интервью — это полностью автоматический AI-скрининг для оценки базовых навыков (коммуникация, адекватность). IT-интервью включает AI-прескрининг + живое тех-интервью с Senior-экспертом для глубокой проверки технических компетенций.',
       q4: 'Как быстро я получу результаты?',
@@ -1131,7 +1192,7 @@ export const translations: Record<Language, Translations> = {
       close: 'Закрыть',
     },
     login: {
-      organizerTitle: 'Вход для организаторов',
+      organizerTitle: 'Вход для организаторо��',
       candidateTitle: 'Вход для кандидатов',
       organizerDesc: 'Управление интервью и результатами',
       candidateDesc: 'Пройти интервью',
@@ -1191,8 +1252,6 @@ export const translations: Record<Language, Translations> = {
       testInterviewsDesc: 'Используется для проверки сценариев. Кандидаты из тестовых интервью не учитываются в статистике.',
       candidatesStatsTitle: 'Статистика кандидатов',
       candidatesStatsDesc: 'Детальная статистика по всем кандидатам',
-      loadingCandidates: 'Загрузка данных...',
-      loadingCandidatesDesc: 'Получение списка кандидатов',
       createFirstInterview: 'Создайте своё первое интервью',
       createFirstInterviewDesc: 'Настройте AI-интервью для отбора кандидатов и получите ссылку для отправки',
       createButton: 'Создать интервью',
@@ -1209,15 +1268,12 @@ export const translations: Record<Language, Translations> = {
       qrCodeTitle: 'QR-код для интервью',
       qrCodeDesc: 'Создайте и скачайте QR-коды для интервью',
       interviewLink: 'Ссылка на интервью:',
-      copyLink: 'Скопировать ссылку',
       downloadQR: 'Скачать QR-код',
       print: 'Распечатать',
       qrCodePlacement: 'Разместите QR-код в офисе, на стнде или в печатных материалах. Кандидаты смогут отсканировать его теефоном и сразу начать интервью.',
       uniqueLinks: 'Уникальные ссылки',
       testLink: 'Тестовая ссылка',
       copied: 'Скопировано!',
-      candidatesButton: 'Кандидаты',
-      backToInterviews: 'Назад к интервью',
       passInterview: 'Пройти интервью',
       testLabel: 'ТЕСТ',
       beginnerLevel: 'Начальный',
@@ -1256,7 +1312,7 @@ export const translations: Record<Language, Translations> = {
       aiGenerationTitle: '✨ Генерация через AI',
       aiGenerationDesc: 'Опишите вакансию — AI создаст вопросы, уточнения и сценарий автоматически',
       jobDescription: 'Описание вакансии',
-      jobDescriptionPlaceholder: 'Например: Ищем оператора колл-центра для обработки входящих звонков. Требования: опыт работы с клиентами, стрессоустой��ивость, грамотная речь. Обязанности: прием звонков, консультирование клиентов, работа в CRM.',
+      jobDescriptionPlaceholder: 'Например: Ищем оператора колл-центра для обработки входящих звонков. Требования: опыт работы с клиентами, стрессоустойчивость, грамотная речь. Обязанности: прием звонков, консультирование клиентов, работа в CRM.',
       generateQuestions: 'Сгенерировать вопросы',
       generating: 'Генерируем...',
       questionsTitle: 'Базовые вопросы для первичного отбора',
@@ -1269,6 +1325,18 @@ export const translations: Record<Language, Translations> = {
       addQuestion: 'Добавить вопрос',
       addQuestionPlaceholder: 'Добавить свой вопрос...',
       recommended: 'Рекомендуется 3–6 вопросов',
+      // Evaluation Criteria Section
+      evaluationCriteriaTitle: 'Критерии оценки кандидата',
+      evaluationCriteriaDesc: 'Определите обязательные и желательные требования для оценки кандидатов',
+      generateWithAI: '✨ Сгенерировать через AI',
+      mustHaveTitle: 'Обязательные требования (Must have)',
+      mustHaveSubtitle: 'Кандидат должен соответствовать всем этим критериям',
+      niceToHaveTitle: 'Желательные требования (Nice to have)',
+      niceToHaveSubtitle: 'Дополнительные преимущества, но не обязательные',
+      addRequirement: 'Добавить требование',
+      requirementPlaceholder: 'Например: Опыт работы от 2 лет',
+      mustHaveTag: 'Обязательно',
+      niceToHaveTag: 'Желательно',
       dynamicQuestionsTitle: 'Дополнительные вопросы на усмотрение робота',
       dynamicQuestionsDesc: 'Робот может задавать дополнительные вопросы по ходу диалога на основе ответов кандидата для более глубокого понимания его опыта и компетенций',
       simulationTitle: 'Моделирование реальной рабочей ситуации (опционально)',
@@ -1291,18 +1359,6 @@ export const translations: Record<Language, Translations> = {
       alertQuestions: 'Пожалуйста, добавьте хотя бы один вопрос',
       alertJobDescription: 'Пожалуйста, укажите описание вакансии',
       successMessage: '✨ Вопросы, уточняющие подвопросы и сценарий успешно сгенерированы!',
-      errorGenerate: 'Ошибка при генерации. Попробуйте снова.',
-      evaluationCriteriaTitle: 'Критерии оценки кандидата',
-      evaluationCriteriaDesc: 'Укажите обязательные и желательные требования для фильтрации кандидатов',
-      generateWithAI: 'Сгенерировать с AI',
-      mustHaveTitle: '🔴 Обязательные требования',
-      mustHaveSubtitle: 'Кандидат ДОЛЖЕН соответствовать этим критериям',
-      mustHaveTag: 'ОБЯЗАТЕЛЬНО',
-      niceToHaveTitle: '🔵 Было бы хорошо',
-      niceToHaveSubtitle: 'Желательные, но не критичные требования',
-      niceToHaveTag: 'ЖЕЛАТЕЛЬНО',
-      requirementPlaceholder: 'Например: Опыт работы более 2 лет',
-      addRequirement: 'Добавить',
     },
     candidateEvaluation: {
       backToList: 'Назад к списку',
@@ -1440,7 +1496,7 @@ export const translations: Record<Language, Translations> = {
     sessionView: {
       interview: 'Интервью',
       analyzing: 'Анализирую ответ',
-      speaking: 'София говорит',
+      speaking: 'ScreenMe говорит',
       youSpeaking: 'Вы отвечаете',
       complete: 'Интервью завершено!',
       completeMessage: 'Спасибо за ваше время. Мы свяжемся с вами в ближайшее время.',
@@ -1461,7 +1517,7 @@ export const translations: Record<Language, Translations> = {
       recruiter: 'Рекрутер',
       candidate: 'Кандидат',
       you: 'Вы',
-      sofia: 'София',
+      sofia: 'ScreenMe',
       micOff: 'Микрофон выкл',
       recording: 'Запись ответа...',
       endCall: 'Конец',
@@ -1508,7 +1564,7 @@ export const translations: Record<Language, Translations> = {
       experience: 'Опыт',
       transcription: 'Расшифровка диалога',
       download: 'Скачать отчет',
-      back: 'Назад',
+      back: '��азад',
     },
     candidatesDemoList: {
       backButton: 'Вернуться на главную',
@@ -1573,14 +1629,41 @@ export const translations: Record<Language, Translations> = {
       ctaSecondary: 'Login to Organizer Dashboard',
       stat1Value: '92%',
       stat1Label: 'Candidate Assessment Accuracy',
-      stat2Value: '5-7 min',
+      stat2Value: '10 min',
       stat2Label: 'Average Interview Time',
       stat3Value: '24/7',
       stat3Label: 'Automated Screening',
     },
     choice: {
       badge: 'Choose Your Direction',
-      title: 'Two Hiring Formats — One Platform',
+      title: 'Two Stages for Perfect Hiring',
+      description: 'First AI filters basic skills through Zoom conference, then for IT positions senior/lead experts conduct live technical interviews',
+      stage1Badge: 'STAGE 1',
+      stage1Title: 'AI Screening via Video Conference',
+      stage1Description: 'Artificial intelligence conducts full interview in Zoom-like interface. Instead of live recruiter — smart AI that assesses communication, experience and motivation.',
+      stage1Feature1: 'Video conference 24/7 without HR involvement',
+      stage1Feature2: 'AI instead of human — same atmosphere, no time costs',
+      stage1Feature3: 'Automatic evaluation and report right after interview',
+      stage1Duration: '7-10 minutes',
+      stage1ZoomTitle: 'AI Interview',
+      stage1AIRole: 'AI Recruiter',
+      stage1Question: 'Tell me about your customer service experience. How do you handle conflict situations?',
+      stage2Badge: 'STAGE 2 • FOR IT',
+      stage2Title: 'Live Technical Interview',
+      stage2Description: 'Senior and Lead experts from BigTech companies conduct deep technical verification in real-time. Code review, system design, architectural solutions.',
+      stage2Feature1: 'Live experts from major companies',
+      stage2Feature2: 'Hard skills verification: code review, algorithms, architecture',
+      stage2Feature3: 'Detailed report with hiring recommendations',
+      stage2Duration: '45-60 minutes',
+      stage2ZoomTitle: 'Technical Interview',
+      stage2ExpertRole: 'Senior Engineer, ex-BigTech',
+      stage2TopicLabel: 'Discussion topic',
+      stage2Topic: 'System Design: designing highload API',
+      stage2Button: 'Connect Experts',
+      thenLabel: 'Then',
+      durationLabel: 'Duration',
+      resultBadge: 'Result: ready candidates for final hiring',
+      resultDescription: 'You get verified specialists with detailed reports',
       massCard: {
         title: 'Mass Recruitment',
         subtitle: 'Mass Hiring Automation',
@@ -1594,7 +1677,7 @@ export const translations: Record<Language, Translations> = {
         title: 'IT Recruitment',
         subtitle: 'Expert Tech Screening',
         feature1: 'AI pre-screening + Live tech interview with Senior expert',
-        feature2: 'Experts from BigTech (Yandex, Sber, T-Bank)',
+        feature2: 'Experts from major tech companies',
         feature3: 'Deep Hard Skills audit',
         price: 'custom pricing',
         button: 'Connect IT Experts',
@@ -1620,28 +1703,28 @@ export const translations: Record<Language, Translations> = {
     },
     experts: {
       badge: 'Who Reviews',
-      title: 'IT Interviewers are Tech Leads from Top Companies',
+      title: 'IT Interviewers are Tech Leads from Major Companies',
       subtitle: 'Verify Hard Skills and provide detailed feedback',
       expert1Name: 'Alexey Smirnov',
       expert1Role: 'Senior Backend Engineer',
-      expert1Company: 'Yandex',
+      expert1Company: 'ex-BigTech',
       expert2Name: 'Maria Petrova',
       expert2Role: 'Tech Lead Frontend',
-      expert2Company: 'Sber',
+      expert2Company: 'ex-BigTech',
       expert3Name: 'Dmitry Kozlov',
       expert3Role: 'Principal Architect',
-      expert3Company: 'T-Bank',
+      expert3Company: 'ex-BigTech',
     },
     demo: {
       aiInterview: 'AI Interview',
-      recruiterName: 'Sofia',
+      recruiterName: 'ScreenMe',
       recruiterRole: 'AI Recruiter',
       you: 'You',
       candidate: 'Candidate',
       analyzing: 'Analyzing...',
-      speaking: 'Sofia is speaking',
+      speaking: 'ScreenMe is speaking',
       youSpeaking: 'You are responding',
-      greeting: 'Hello! My name is Sofia, I will conduct an interview with you. Please tell me about your customer service experience.',
+      greeting: 'Hello! My name is ScreenMe, I will conduct an interview with you. Please tell me about your customer service experience.',
       listening1: 'I worked in a cafe...',
       question1: 'Great! What difficult situations have you encountered when communicating with guests?',
       listening2: 'There was a case with an unhappy customer...',
@@ -1681,7 +1764,7 @@ export const translations: Record<Language, Translations> = {
       step3Voice: 'Voice dialogue in real time',
       step3Scenario: 'Client role-playing simulation',
       step3Analysis: 'Automatic answer analysis',
-      step3Time: 'Average time: 5-7 minutes',
+      step3Time: 'Average time: 10 minutes',
       step4Badge: 'STEP 4',
       step4Title: 'Get expert report and rating',
       step4Description: 'Auto-rating for mass positions (work readiness, soft skills) or tech audit for IT (detailed competency matrix). For complex vacancies, our expert joins at this stage to conduct final live interview based on AI data.',
@@ -1777,6 +1860,11 @@ export const translations: Record<Language, Translations> = {
       feature2: 'No Cold Calls',
       feature3: 'Without Waiting for Responses',
     },
+    reportTypes: {
+      title: 'Report Types:',
+      autoRating: 'Auto-Rating (Mass Positions)',
+      techAudit: 'Tech-Audit (IT Specialists)',
+    },
     step3Details: {
       aiAssistant: 'AI ASSISTANT',
       conducting: 'Conducting interview...',
@@ -1792,12 +1880,12 @@ export const translations: Record<Language, Translations> = {
       topCandidates: 'TOP CANDIDATES',
       clearFormulations: 'Clear formulations',
       expertReview: 'Expert Review • 1h 15min',
-      candidateName1: 'Anna Petrova',
-      candidateName2: 'Ivan Sidorov',
-      candidateName3: 'Maria Ivanova',
-      scoreExcellent: 'Excellent',
-      scoreGood: 'Good',
-      scoreAverage: 'Average',
+      candidateName1: 'Alexey Volkov',
+      candidateName2: 'Dmitry Kozlov',
+      candidateName3: 'Sergey Morozov',
+      scoreExcellent: 'Recommended',
+      scoreGood: 'Needs Clarification',
+      scoreAverage: 'Not Suitable',
       freeStartBold: 'Start for free:',
       freeStartText: 'First 10 interviews as a gift. Evaluate screening quality, see detailed analytics and feel the difference in the first week.',
     },
@@ -1932,8 +2020,6 @@ export const translations: Record<Language, Translations> = {
       testInterviewsDesc: 'Used for scenario testing. Candidates from test interviews are not included in statistics.',
       candidatesStatsTitle: 'Candidate Statistics',
       candidatesStatsDesc: 'Detailed statistics on all candidates',
-      loadingCandidates: 'Loading...',
-      loadingCandidatesDesc: 'Fetching candidates list',
       createFirstInterview: 'Create your first interview',
       createFirstInterviewDesc: 'Set up an AI interview for candidate selection and get a link to share',
       createButton: 'Create Interview',
@@ -1950,15 +2036,12 @@ export const translations: Record<Language, Translations> = {
       qrCodeTitle: 'QR Code for Interview',
       qrCodeDesc: 'Create and download QR codes for interviews',
       interviewLink: 'Interview Link:',
-      copyLink: 'Copy link',
       downloadQR: 'Download QR Code',
       print: 'Print',
       qrCodePlacement: 'Place the QR code in the office, on a stand, or in printed materials. Candidates can scan it with their phone and start the interview immediately.',
       uniqueLinks: 'Unique Links',
       testLink: 'Test Link',
       copied: 'Copied!',
-      candidatesButton: 'Candidates',
-      backToInterviews: 'Back to Interviews',
       passInterview: 'Take Interview',
       testLabel: 'TEST',
       beginnerLevel: 'Beginner',
@@ -2010,6 +2093,18 @@ export const translations: Record<Language, Translations> = {
       addQuestion: 'Add Question',
       addQuestionPlaceholder: 'Add your question...',
       recommended: 'Recommended 3–6 questions',
+      // Evaluation Criteria Section
+      evaluationCriteriaTitle: 'Candidate Evaluation Criteria',
+      evaluationCriteriaDesc: 'Define mandatory and desired requirements for evaluating candidates',
+      generateWithAI: '✨ Generate via AI',
+      mustHaveTitle: 'Mandatory Requirements (Must have)',
+      mustHaveSubtitle: 'Candidate must meet all these criteria',
+      niceToHaveTitle: 'Desired Requirements (Nice to have)',
+      niceToHaveSubtitle: 'Additional advantages, but not mandatory',
+      addRequirement: 'Add Requirement',
+      requirementPlaceholder: 'For example: 2+ years of experience',
+      mustHaveTag: 'Required',
+      niceToHaveTag: 'Desired',
       dynamicQuestionsTitle: 'Additional Questions at Bot\'s Discretion',
       dynamicQuestionsDesc: 'The bot can ask additional questions during the dialogue based on candidate\'s answers for deeper understanding of their experience and competencies',
       simulationTitle: 'Real Work Situation Modeling (optional)',
@@ -2032,18 +2127,6 @@ export const translations: Record<Language, Translations> = {
       alertQuestions: 'Please add at least one question',
       alertJobDescription: 'Please specify job description',
       successMessage: '✨ Questions, clarifying sub-questions and scenario successfully generated!',
-      errorGenerate: 'Error generating. Please try again.',
-      evaluationCriteriaTitle: 'Candidate Evaluation Criteria',
-      evaluationCriteriaDesc: 'Specify required and desired requirements for filtering candidates',
-      generateWithAI: 'Generate with AI',
-      mustHaveTitle: '🔴 Must Have Requirements',
-      mustHaveSubtitle: 'Candidate MUST meet these criteria',
-      mustHaveTag: 'REQUIRED',
-      niceToHaveTitle: '🔵 Nice to Have',
-      niceToHaveSubtitle: 'Desired but not critical requirements',
-      niceToHaveTag: 'OPTIONAL',
-      requirementPlaceholder: 'For example: 2+ years of experience',
-      addRequirement: 'Add',
     },
     candidateEvaluation: {
       backToList: 'Back to list',
@@ -2181,7 +2264,7 @@ export const translations: Record<Language, Translations> = {
     sessionView: {
       interview: 'Interview',
       analyzing: 'Analyzing response',
-      speaking: 'Sofia is speaking',
+      speaking: 'ScreenMe is speaking',
       youSpeaking: 'You are responding',
       complete: 'Interview completed!',
       completeMessage: 'Thank you for your time. We will contact you soon.',
@@ -2202,7 +2285,7 @@ export const translations: Record<Language, Translations> = {
       recruiter: 'Recruiter',
       candidate: 'Candidate',
       you: 'You',
-      sofia: 'Sofia',
+      sofia: 'ScreenMe',
       micOff: 'Mic Off',
       recording: 'Recording response...',
       endCall: 'End',
