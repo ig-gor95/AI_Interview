@@ -391,6 +391,20 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
                 </div>
               )}
             </div>
+
+            {/* Clear Filters Button */}
+            {(selectedPositionFilter !== 'all' || selectedCompanyFilter !== 'all') && (
+              <button
+                onClick={() => {
+                  setSelectedPositionFilter('all');
+                  setSelectedCompanyFilter('all');
+                }}
+                className="px-4 py-2.5 bg-gray-100 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <X className="w-4 h-4" />
+                <span>{language === 'ru' ? 'Сбросить' : 'Clear'}</span>
+              </button>
+            )}
           </div>
         </div>
 
