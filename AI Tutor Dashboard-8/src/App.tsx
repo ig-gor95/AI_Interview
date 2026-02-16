@@ -86,6 +86,14 @@ function AppContent() {
         return;
       }
 
+      // Get current user from localStorage
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        console.warn('No current user found, cannot set organizerId');
+        setSessions([]);
+        return;
+      }
+
       // Transform summary to Session format for compatibility
       const transformedSessions = interviews.map((interview: any) => {
         const sessionId = interview.id;
@@ -98,8 +106,8 @@ function AppContent() {
         }
         return {
           id: sessionId,
-          organizerId: '', // Not needed for dashboard
-          organizerName: '', // Not needed for dashboard
+          organizerId: currentUser.id, // Set from current user since API already filters by organizer
+          organizerName: currentUser.name,
           params: {
             position: interview.position,
             company: interview.company,
