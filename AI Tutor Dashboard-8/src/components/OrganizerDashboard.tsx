@@ -519,10 +519,10 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
                     {/* Action Buttons */}
                     <div className="space-y-2 pt-4 border-t border-gray-100">
                       {/* Primary Actions - Top Row */}
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => setSelectedSessionForLinks(session)}
-                          className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium"
+                          className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium"
                         >
                           <LinkIcon className="w-4 h-4" />
                           <span>{t.organizerDashboard.uniqueLinks}</span>
@@ -531,7 +531,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
                         <button
                           onClick={() => candidatesCount > 0 && setSelectedSessionForCandidates(session)}
                           disabled={candidatesCount === 0}
-                          className={`px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
+                          className={`flex-1 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
                             candidatesCount > 0
                               ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:shadow-lg hover:scale-[1.02]'
                               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -548,10 +548,10 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
                       </div>
 
                       {/* Secondary Actions - Bottom Row */}
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => onOpenSession(session.id)}
-                          className="px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
+                          className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
                           <Video className="w-4 h-4" />
                           <span className="hidden sm:inline">{t.organizerDashboard.testLabel}</span>
@@ -563,7 +563,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
                             setSelectedSessionForQR(session);
                             setShowQRModal(true);
                           }}
-                          className="px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
+                          className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
                           <QrCode className="w-4 h-4" />
                           <span className="hidden sm:inline">{language === 'ru' ? 'QR-код' : 'QR-code'}</span>
@@ -571,7 +571,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
 
                         <button
                           onClick={() => setSessionToEdit(session)}
-                          className="px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
+                          className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
                           <Edit2 className="w-4 h-4" />
                           <span className="hidden sm:inline">{language === 'ru' ? 'Редактировать' : 'Edit'}</span>
@@ -579,7 +579,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
 
                         <button
                           onClick={() => setSessionToDelete(session)}
-                          className="px-3 py-2.5 border border-red-300 text-red-700 bg-red-50 rounded-lg hover:bg-red-100 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
+                          className="flex-1 px-3 py-2.5 border border-red-300 text-red-700 bg-red-50 rounded-lg hover:bg-red-100 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
                           <Trash2 className="w-4 h-4" />
                           <span className="hidden sm:inline">{language === 'ru' ? 'Удалить' : 'Delete'}</span>
