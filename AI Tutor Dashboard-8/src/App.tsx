@@ -151,13 +151,14 @@ function AppContent() {
       const transformedResults = candidatesData.results.map((result: any) => ({
         id: result.id || result.sessionId,
         sessionId: result.sessionId,
-        studentName: result.candidateName,
-        studentEmail: result.candidateEmail,
+        interviewId: result.interviewId,
+        studentName: result.studentName,
+        studentEmail: result.studentEmail,
         score: result.score,
         qualityRating: result.qualityRating,
         completedAt: result.completedAt,
         transcript: result.transcript || [],
-        requirementChecks: result.requirementChecks || []
+        requirementChecks: result.criterionResults || []
       }));
 
       console.log('Transformed results:', transformedResults);

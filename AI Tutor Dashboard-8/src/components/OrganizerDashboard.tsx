@@ -163,7 +163,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
               <span>{language === 'ru' ? 'Назад к интервью' : 'Back to Interviews'}</span>
             </button>
             <CandidatesKanban
-              results={results.filter(r => r.sessionId === selectedSessionForCandidates.id)}
+              results={results.filter(r => (r as any).interviewId === selectedSessionForCandidates.id)}
               sessions={[selectedSessionForCandidates]}
               onViewEvaluation={onViewEvaluation}
               initialPosition={selectedSessionForCandidates.params.position || selectedSessionForCandidates.params.topic || 'AI Интервью'}
@@ -459,7 +459,8 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
               {filteredSessions.map((session) => {
                 const position = session.params.position || session.params.topic || 'AI Интервью';
                 // Use candidatesCount from session if available (from API), otherwise count from results
-                const candidatesCount = (session as any).candidatesCount ?? results.filter(r => r.sessionId === session.id).length;
+                // Note: session here is Interview template, so we need to filter by interviewId (not sessionId)
+                const candidatesCount = (session as any).candidatesCount ?? results.filter(r => (r as any).interviewId === session.id).length;
                 
                 return (
                   <div key={session.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg transition-all duration-300 flex flex-col h-full">
