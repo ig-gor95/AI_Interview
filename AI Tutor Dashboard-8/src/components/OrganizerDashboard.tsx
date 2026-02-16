@@ -40,8 +40,71 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
   const [sortBy, setSortBy] = useState<'date' | 'rating' | 'name'>('date');
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [candidateStatuses, setCandidateStatuses] = useState<Record<string, string>>({});
+  const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
+  const [companyFilter, setCompanyFilter] = useState<string>('');
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const [positionFilter, setPositionFilter] = useState<string>('');
+  const [showPositionDropdown, setShowPositionDropdown] = useState(false);
 
-  const userSessions = sessions.filter(s => s.organizerId === user.id);
+  // Filter sessions and validate UUID format
+  const allUserSessions = sessions.filter(s => {
+    if (s.organizerId !== user.id) return false;
+    // Validate UUID format to prevent errors with old mockData IDs
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(s.id)) {
+      console.warn(`Skipping session with invalid UUID format: ${s.id}`);
+      return false;
+    }
+    return true;
+  });
+
+  // Get unique companies for filter (case-insensitive deduplication)
+  const uniqueCompanies = Array.from(
+    allUserSessions
+      .map(s => s.params.company)
+      .filter((c): c is string => !!c && c.trim() !== '')
+      .reduce((map, company) => {
+        const key = company.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, company);
+        }
+        return map;
+      }, new Map<string, string>())
+      .values()
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  // Get unique positions for filter (case-insensitive deduplication)
+  const uniquePositions = Array.from(
+    allUserSessions
+      .map(s => s.params.position || s.params.topic)
+      .filter((p): p is string => !!p && p.trim() !== '')
+      .reduce((map, position) => {
+        const key = position.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, position);
+        }
+        return map;
+      }, new Map<string, string>())
+      .values()
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  // Filter companies by search input
+  const filteredCompanies = uniqueCompanies.filter(company =>
+    company.toLowerCase().includes(companyFilter.toLowerCase())
+  );
+
+  // Filter positions by search input
+  const filteredPositions = uniquePositions.filter(position =>
+    position.toLowerCase().includes(positionFilter.toLowerCase())
+  );
+
+  // Apply company and position filters to sessions
+  const userSessions = allUserSessions.filter(s => {
+    const companyMatch = !companyFilter || s.params.company?.toLowerCase().includes(companyFilter.toLowerCase());
+    const positionMatch = !positionFilter || (s.params.position || s.params.topic)?.toLowerCase().includes(positionFilter.toLowerCase());
+    return companyMatch && positionMatch;
+  });
+
   const results = getResultsByOrganizerId(user.id);
 
   // Sync activeTab with currentTab when it changes externally
@@ -222,7 +285,7 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
 
         {/* Create Form Modal */}
         {showCreateForm && (
-          <InterviewForm 
+          <InterviewForm
             onClose={() => setShowCreateForm(false)}
             onCreate={handleCreateSession}
           />
@@ -231,6 +294,150 @@ export function OrganizerDashboard({ user, sessions, onRefresh, onOpenSession, o
         {/* Content based on active tab */}
         {activeTab === 'manage' && (
           <div className="space-y-4">
+            {/* Filters Section */}
+            {(uniqueCompanies.length > 0 || uniquePositions.length > 0) && (
+              <div className="bg-white rounded-xl p-4 sm:p-6 border border-gray-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <SlidersHorizontal className="w-5 h-5 text-gray-600" />
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {language === 'ru' ? 'Фильтры' : 'Filters'}
+                  </h3>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Company filter */}
+                  {uniqueCompanies.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {language === 'ru' ? 'Фильтр по компании' : 'Filter by company'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={companyFilter}
+                          onChange={(e) => setCompanyFilter(e.target.value)}
+                          onFocus={() => setShowCompanyDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowCompanyDropdown(false), 200)}
+                          placeholder={language === 'ru' ? 'Компания...' : 'Company...'}
+                          className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        {companyFilter && (
+                          <button
+                            onClick={() => setCompanyFilter('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {showCompanyDropdown && filteredCompanies.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredCompanies.map((company) => (
+                              <button
+                                key={company}
+                                onClick={() => {
+                                  setCompanyFilter(company);
+                                  setShowCompanyDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors text-sm"
+                              >
+                                {company}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Position filter */}
+                  {uniquePositions.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {language === 'ru' ? 'Фильтр по вакансии' : 'Filter by position'}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={positionFilter}
+                          onChange={(e) => setPositionFilter(e.target.value)}
+                          onFocus={() => setShowPositionDropdown(true)}
+                          onBlur={() => setTimeout(() => setShowPositionDropdown(false), 200)}
+                          placeholder={language === 'ru' ? 'Вакансия...' : 'Position...'}
+                          className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        {positionFilter && (
+                          <button
+                            onClick={() => setPositionFilter('')}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 w-6 h-6 flex items-center justify-center"
+                          >
+                            ✕
+                          </button>
+                        )}
+                        {showPositionDropdown && filteredPositions.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            {filteredPositions.map((position) => (
+                              <button
+                                key={position}
+                                onClick={() => {
+                                  setPositionFilter(position);
+                                  setShowPositionDropdown(false);
+                                }}
+                                className="w-full px-4 py-2 text-left hover:bg-gray-100 transition-colors text-sm"
+                              >
+                                {position}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Active filters indicator */}
+                {(companyFilter || positionFilter) && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-600">
+                        {language === 'ru' ? 'Активные фильтры:' : 'Active filters:'}
+                      </span>
+                      {companyFilter && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full">
+                          {companyFilter}
+                          <button
+                            onClick={() => setCompanyFilter('')}
+                            className="hover:text-blue-900"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      )}
+                      {positionFilter && (
+                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-800 text-sm rounded-full">
+                          {positionFilter}
+                          <button
+                            onClick={() => setPositionFilter('')}
+                            className="hover:text-purple-900"
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      )}
+                      <button
+                        onClick={() => {
+                          setCompanyFilter('');
+                          setPositionFilter('');
+                        }}
+                        className="text-sm text-gray-600 hover:text-gray-900 underline"
+                      >
+                        {language === 'ru' ? 'Сбросить все' : 'Clear all'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {userSessions.length === 0 ? (
               <div className="bg-white rounded-xl p-12 text-center border border-gray-200">
                 <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
