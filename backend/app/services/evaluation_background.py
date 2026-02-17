@@ -42,13 +42,13 @@ async def run_evaluation_background(session_id: str):
             transcript_count = len(session_for_eval.transcript_messages) if session_for_eval.transcript_messages else 0
             print(f"[BackgroundEval] Session loaded, transcript_messages count={transcript_count}")
 
-            # Set evaluation status to IN_PROGRESS
-            session_for_eval.evaluation_status = EvaluationStatus.IN_PROGRESS
-            await bg_db.commit()
-
             # Explicitly load all relationships into memory to avoid lazy loading issues
             # This is critical to prevent "greenlet_spawn has not been called" errors
             try:
+                # Set evaluation status to IN_PROGRESS (inside try block to ensure FAILED is set on any error)
+                session_for_eval.evaluation_status = EvaluationStatus.IN_PROGRESS
+                await bg_db.commit()
+                print(f"[BackgroundEval] Evaluation status set to IN_PROGRESS for session {session_id}")
                 # Explicitly access relationships to load them into memory
                 # This must be done in the same async context where the query was executed
                 transcript_messages_list = session_for_eval.transcript_messages
@@ -60,6 +60,7 @@ async def run_evaluation_background(session_id: str):
 
                 # Convert to list to load all items into memory
                 transcript_messages = list(transcript_messages_list)
+                print(f"[BackgroundEval] Loaded {len(transcript_messages)} transcript messages into memory")
 
                 # Explicitly load all interview data into memory
                 interview = session_for_eval.interview
@@ -68,11 +69,14 @@ async def run_evaluation_background(session_id: str):
                     config = interview.config
                     questions_list = list(interview.questions or [])
                     criteria_list = list(interview.evaluation_criteria or [])
+                    print(f"[BackgroundEval] Loaded interview with {len(questions_list)} questions and {len(criteria_list)} criteria")
                     # Ensure all data is loaded by accessing their attributes
                     for q in questions_list:
                         _ = q.question_text
                     for c in criteria_list:
                         _ = c.criterion_name
+                else:
+                    print(f"[BackgroundEval] WARNING: No interview found for session {session_id}")
 
                 # Now all data is loaded into memory, safe to use the object
                 print(f"[BackgroundEval] Calling generate_evaluation_from_transcript for session {session_id}")
@@ -81,6 +85,7 @@ async def run_evaluation_background(session_id: str):
                     db=bg_db,
                     ai_service=openai_service,
                 )
+                print(f"[BackgroundEval] generate_evaluation_from_transcript completed for session {session_id}")
 
                 # Если GPT вернул невалидный JSON — подставился fallback с "Evaluation incomplete". Не считаем успехом.
                 cr_list = result.get("criterion_results") or []
@@ -107,14 +112,18 @@ async def run_evaluation_background(session_id: str):
 
             except Exception as eval_err:
                 # If an error occurred while loading data, log and skip
-                print(f"[BackgroundEval] Error loading session data for evaluation: {eval_err}")
+                print(f"[BackgroundEval] Error during evaluation for session {session_id}: {eval_err}")
                 import traceback
                 traceback.print_exc()
 
                 # Set evaluation status to FAILED on error
-                session_for_eval.evaluation_status = EvaluationStatus.FAILED
-                await bg_db.commit()
-                raise
+                try:
+                    session_for_eval.evaluation_status = EvaluationStatus.FAILED
+                    await bg_db.commit()
+                    print(f"[BackgroundEval] Evaluation status set to FAILED for session {session_id}")
+                except Exception as commit_err:
+                    print(f"[BackgroundEval] Failed to commit FAILED status: {commit_err}")
+                # Do NOT raise - let the task complete gracefully
 
         except Exception as e:
             print(f"[BackgroundEval] Error in background evaluation for session {session_id}: {e}")
