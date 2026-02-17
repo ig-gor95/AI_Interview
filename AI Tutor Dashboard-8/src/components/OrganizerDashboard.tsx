@@ -526,9 +526,12 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                         <button
                           onClick={() => candidatesCount > 0 && onViewCandidates && onViewCandidates(session.id)}
                           disabled={candidatesCount === 0}
+                          style={candidatesCount > 0 ? {
+                            background: 'linear-gradient(to right, rgb(22, 163, 74), rgb(5, 150, 105))'
+                          } : undefined}
                           className={`flex-1 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
                             candidatesCount > 0
-                              ? 'bg-green-600 text-white hover:bg-green-700 hover:shadow-lg'
+                              ? 'text-white hover:shadow-lg hover:scale-[1.02]'
                               : 'bg-gray-200 text-gray-600 cursor-not-allowed border border-gray-300'
                           }`}
                         >
