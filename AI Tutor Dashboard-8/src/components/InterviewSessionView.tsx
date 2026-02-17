@@ -1386,7 +1386,7 @@ export function InterviewSessionView() {
       wsRef.current.send(JSON.stringify({ type: 'end' }));
     }
     stopTimer();
-    navigate(`/interview/thank-you`);
+    navigate(`/interview/${token}/results`);
   };
 
   // Cleanup on unmount
