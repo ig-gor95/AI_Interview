@@ -3,7 +3,6 @@ import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageS
 import { Session, SessionParams, User } from '../types/index';
 import { saveSession } from '../lib/mockData';
 import { InterviewForm } from './InterviewForm';
-import { CandidatesKanban } from './CandidatesKanban';
 import { InterviewLinksManager } from './InterviewLinksManager';
 import { getTopCandidatesPercentage, scoreToQualityRating } from '../lib/qualityRating';
 import QRCode from 'qrcode';
@@ -17,11 +16,12 @@ interface Props {
   onRefresh: () => void;
   onOpenSession: (sessionId: string) => void;
   onViewEvaluation?: (sessionId: string) => void;
+  onViewCandidates?: (interviewId: string) => void;
   currentTab?: 'manage' | 'students';
   onTabChange?: (tab: 'manage' | 'students') => void;
 }
 
-export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenSession, onViewEvaluation }: Props) {
+export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenSession, onViewEvaluation, onViewCandidates }: Props) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
@@ -36,7 +36,6 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
   const [companyNameFilter, setCompanyNameFilter] = useState('');
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
-  const [selectedSessionForCandidates, setSelectedSessionForCandidates] = useState<Session | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<Session | null>(null);
   const [sessionToEdit, setSessionToEdit] = useState<Session | null>(null);
   const [language] = useAtom(languageAtom);
@@ -148,28 +147,10 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
   return (
     <div className="min-h-screen bg-gray-50">
       {selectedSessionForLinks ? (
-        <InterviewLinksManager 
+        <InterviewLinksManager
           session={selectedSessionForLinks}
           onBack={() => setSelectedSessionForLinks(null)}
         />
-      ) : selectedSessionForCandidates ? (
-        <div className="min-h-screen bg-gray-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-            <button
-              onClick={() => setSelectedSessionForCandidates(null)}
-              className="mb-6 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              <span>{language === 'ru' ? 'Назад к интервью' : 'Back to Interviews'}</span>
-            </button>
-            <CandidatesKanban
-              results={results.filter(r => (r as any).interviewId === selectedSessionForCandidates.id)}
-              sessions={[selectedSessionForCandidates]}
-              onViewEvaluation={onViewEvaluation}
-              initialPosition={selectedSessionForCandidates.params.position || selectedSessionForCandidates.params.topic || 'AI Интервью'}
-            />
-          </div>
-        </div>
       ) : (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Stats */}
@@ -543,7 +524,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                         </button>
 
                         <button
-                          onClick={() => candidatesCount > 0 && setSelectedSessionForCandidates(session)}
+                          onClick={() => candidatesCount > 0 && onViewCandidates && onViewCandidates(session.id)}
                           disabled={candidatesCount === 0}
                           className={`flex-1 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
                             candidatesCount > 0

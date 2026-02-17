@@ -53,7 +53,23 @@ export function InterviewCandidatesPage() {
         shareUrl: interviewData.shareUrl || interviewData.share_url || `/interview/${interviewData.id}`
       };
       setInterview(session);
-      setResults(candidatesResponse.results || []);
+
+      // Transform results to match expected format
+      const transformedResults = (candidatesResponse.results || []).map((result: any) => ({
+        id: result.id || result.sessionId,
+        sessionId: result.sessionId,
+        interviewId: result.interviewId,
+        studentName: result.studentName,
+        studentEmail: result.studentEmail,
+        score: result.score,
+        qualityRating: result.qualityRating,
+        completedAt: result.completedAt,
+        transcript: result.transcript || [],
+        requirementChecks: result.criterionResults || []
+      }));
+
+      console.log('[InterviewCandidatesPage] Transformed results:', transformedResults);
+      setResults(transformedResults);
     } catch (err) {
       console.error('[InterviewCandidatesPage] Ошибка загрузки:', err);
       setError(err instanceof Error ? err.message : 'Ошибка загрузки данных');
