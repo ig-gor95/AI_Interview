@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, Video, ChevronDown, TrendingUp, TrendingDown, Search, Download, Mail, Phone, QrCode, X, Send, HelpCircle, Edit2, Trash2 } from 'lucide-react';
 import { Session, SessionParams, User } from '../types/index';
-import { saveSession } from '../lib/mockData';
 import { InterviewForm } from './InterviewForm';
 import { InterviewLinksManager } from './InterviewLinksManager';
 import { getTopCandidatesPercentage, scoreToQualityRating } from '../lib/qualityRating';
 import QRCode from 'qrcode';
 import { useAtom } from 'jotai';
 import { languageAtom, useTranslation } from '../lib/i18n';
+import { interviewsAPI } from '../lib/api';
 
 interface Props {
   user: User;
@@ -85,41 +85,53 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleCreateSession = (params: SessionParams) => {
-    const newSession: Session = {
-      id: `session-${Date.now()}`,
-      organizerId: user.id,
-      organizerName: user.name,
-      params,
-      createdAt: new Date().toISOString(),
-      shareUrl: `/session/session-${Date.now()}`
-    };
-    
-    saveSession(newSession);
-    setShowCreateForm(false);
-    onRefresh();
+  const handleCreateSession = async (params: SessionParams) => {
+    try {
+      console.log('Creating interview with params:', params);
+      await interviewsAPI.createInterview({ params });
+      setShowCreateForm(false);
+      onRefresh();
+    } catch (error) {
+      console.error('Error creating interview:', error);
+      alert(language === 'ru' ? 'Ошибка при создании интервью' : 'Error creating interview');
+    }
   };
 
-  const handleUpdateSession = (params: SessionParams) => {
+  const handleUpdateSession = async (params: SessionParams) => {
     if (!sessionToEdit) return;
-    
-    const updatedSession: Session = {
-      ...sessionToEdit,
-      params
-    };
-    
-    saveSession(updatedSession);
-    setSessionToEdit(null);
-    onRefresh();
+
+    try {
+      console.log('Updating interview:', sessionToEdit.id, 'with params:', params);
+      await interviewsAPI.updateInterview(sessionToEdit.id, { params });
+      setSessionToEdit(null);
+      onRefresh();
+    } catch (error) {
+      console.error('Error updating interview:', error);
+      alert(language === 'ru' ? 'Ошибка при обновлении интервью' : 'Error updating interview');
+    }
   };
 
-  const handleDeleteSession = () => {
+  const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
-    
-    // In a real app, you'd call an API to delete the session
-    // For now, we'll just close the modal
-    alert(language === 'ru' ? 'Удаление интервью временно недоступно' : 'Interview deletion is temporarily unavailable');
-    setSessionToDelete(null);
+
+    const confirmMessage = language === 'ru'
+      ? `Вы уверены что хотите удалить интервью "${sessionToDelete.params.position || sessionToDelete.params.topic}"?`
+      : `Are you sure you want to delete interview "${sessionToDelete.params.position || sessionToDelete.params.topic}"?`;
+
+    if (!confirm(confirmMessage)) {
+      setSessionToDelete(null);
+      return;
+    }
+
+    try {
+      console.log('Deleting interview:', sessionToDelete.id);
+      await interviewsAPI.deleteInterview(sessionToDelete.id);
+      setSessionToDelete(null);
+      onRefresh();
+    } catch (error) {
+      console.error('Error deleting interview:', error);
+      alert(language === 'ru' ? 'Ошибка при удалении интервью' : 'Error deleting interview');
+    }
   };
 
   const copyToClipboard = (sessionId: string, url: string) => {
