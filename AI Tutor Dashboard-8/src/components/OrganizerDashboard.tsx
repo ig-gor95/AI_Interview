@@ -528,7 +528,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                           disabled={candidatesCount === 0}
                           className={`flex-1 px-4 py-3 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium ${
                             candidatesCount > 0
-                              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:shadow-lg hover:scale-[1.02]'
+                              ? 'bg-green-600 text-white hover:bg-green-700 hover:shadow-lg'
                               : 'bg-gray-200 text-gray-600 cursor-not-allowed border border-gray-300'
                           }`}
                         >
