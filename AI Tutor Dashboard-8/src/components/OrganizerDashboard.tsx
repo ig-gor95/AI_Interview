@@ -118,13 +118,18 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
       console.log('Loading full interview data for edit:', session.id);
       const fullInterview = await interviewsAPI.getInterview(session.id);
 
+      console.log('=== EDIT DEBUG ===');
+      console.log('Full interview response from API:', fullInterview);
+      console.log('fullInterview.params:', fullInterview.params);
+      console.log('==================');
+
       // Transform to Session format with full params
       const sessionWithFullData: Session = {
         ...session,
-        params: fullInterview.params || fullInterview
+        params: fullInterview.params
       };
 
-      console.log('Loaded full interview data:', sessionWithFullData);
+      console.log('Session with full data to be set:', sessionWithFullData);
       setSessionToEdit(sessionWithFullData);
     } catch (error) {
       console.error('Error loading interview for edit:', error);
@@ -434,7 +439,9 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
 
         {/* Edit Form Modal */}
         {sessionToEdit && (
-          <InterviewForm 
+          <InterviewForm
+            editMode={true}
+            interviewId={sessionToEdit.id}
             onClose={() => setSessionToEdit(null)}
             onCreate={handleUpdateSession}
             initialData={sessionToEdit.params}
