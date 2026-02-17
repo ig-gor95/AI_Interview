@@ -39,6 +39,9 @@ from app.schemas.interview import TranscriptMessage
 
 router = APIRouter()
 
+# Global set to keep references to background tasks and prevent garbage collection
+_background_tasks: set = set()
+
 
 # Helper functions
 def score_to_quality_rating(score: int) -> QualityRating:
@@ -321,15 +324,29 @@ async def get_candidate_detail(
             quality_rating = score_to_quality_rating(score)
         elif session.evaluation_status in (EvaluationStatus.FAILED, EvaluationStatus.PENDING, None):
             # Auto-trigger background evaluation on FAILED/PENDING/None
+            print(f"[get_candidate_detail] Triggering evaluation for session {session.id}, status: {session.evaluation_status}")
             session.evaluation_status = EvaluationStatus.IN_PROGRESS
             await db.commit()
-            asyncio.create_task(run_evaluation_background(str(session.id)))
+            # Keep strong reference to task to prevent garbage collection
+            task = asyncio.create_task(run_evaluation_background(str(session.id)))
+            _background_tasks.add(task)
+            task.add_done_callback(lambda t: _background_tasks.discard(t))
             # Return partial response: evaluation=None, transcript + criteria available
             evaluation_details = None
             score = None
             quality_rating = None
         else:
-            # IN_PROGRESS - return partial response, frontend will poll
+            # IN_PROGRESS - check if stuck (more than 5 minutes)
+            if session.evaluation_status == EvaluationStatus.IN_PROGRESS:
+                from datetime import datetime, timedelta, timezone
+                # Check when session was completed
+                time_since_completion = datetime.now(timezone.utc) - (session.completed_at or session.started_at or datetime.now(timezone.utc))
+                if time_since_completion > timedelta(minutes=5):
+                    # Stuck for more than 5 minutes, retry
+                    print(f"[get_candidate_detail] Evaluation stuck for {time_since_completion.total_seconds()/60:.1f} minutes, retrying for session {session.id}")
+                    task = asyncio.create_task(run_evaluation_background(str(session.id)))
+                    _background_tasks.add(task)
+                    task.add_done_callback(lambda t: _background_tasks.discard(t))
             evaluation_details = None
             score = None
             quality_rating = None
