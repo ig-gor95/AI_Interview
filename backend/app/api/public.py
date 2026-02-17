@@ -408,8 +408,10 @@ async def get_session_results(
     simulation_info = None
     if scenario := getattr(session, "simulation_scenario", None):
         dialog_items = sorted(getattr(scenario, "dialog", None) or [], key=lambda d: getattr(d, "order_index", 0))
-        # Only include simulation if there's actual dialog (not just scenario creation)
-        if dialog_items:
+        # Only include simulation if there's actual dialog with candidate responses
+        # Check if there's at least one candidate (user) message
+        has_candidate_response = any(getattr(d, "role", "ai") == "candidate" for d in dialog_items)
+        if dialog_items and has_candidate_response:
             simulation_info = {
                 "situation": getattr(scenario, "scenario_description", "") or "",
                 "dialog": [

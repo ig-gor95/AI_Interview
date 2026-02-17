@@ -24,17 +24,21 @@ export function ThankYouPage() {
 
   // Poll for results if evaluation is in progress
   useEffect(() => {
-    if (!results || !results.isEvaluating) {
+    if (!results?.isEvaluating) {
       return;
     }
 
+    console.log('[ThankYouPage] Starting polling for evaluation results');
     const pollInterval = setInterval(() => {
-      console.log('[ThankYouPage] Polling for evaluation results...');
+      console.log('[ThankYouPage] Polling...');
       loadResults();
     }, 3000); // Poll every 3 seconds
 
-    return () => clearInterval(pollInterval);
-  }, [results?.isEvaluating]);
+    return () => {
+      console.log('[ThankYouPage] Stopping polling');
+      clearInterval(pollInterval);
+    };
+  }, [results?.isEvaluating, token]);
 
   const loadResults = async () => {
     if (!token) return;
