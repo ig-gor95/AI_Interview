@@ -382,19 +382,21 @@ async def get_candidate_detail(
         simulation_info = None
         if scenario := getattr(session, "simulation_scenario", None):
             dialog_items = sorted(getattr(scenario, "dialog", None) or [], key=lambda d: getattr(d, "order_index", 0))
-            simulation_info = {
-                "scenarioDescription": getattr(scenario, "scenario_description", None) or "",
-                "clientRole": getattr(scenario, "client_role", None) or "",
-                "dialog": [
-                    {
-                        "role": getattr(d, "role", "ai"),
-                        "message": getattr(d, "message_text", ""),
-                        "tone": getattr(d, "tone", None),
-                    }
-                    for d in dialog_items
-                ],
-                "observations": evaluation_details.get("observations") if evaluation_details else [],
-            }
+            # Only include simulation if there's actual dialog (not just scenario creation)
+            if dialog_items:
+                simulation_info = {
+                    "scenarioDescription": getattr(scenario, "scenario_description", None) or "",
+                    "clientRole": getattr(scenario, "client_role", None) or "",
+                    "dialog": [
+                        {
+                            "role": getattr(d, "role", "ai"),
+                            "message": getattr(d, "message_text", ""),
+                            "tone": getattr(d, "tone", None),
+                        }
+                        for d in dialog_items
+                    ],
+                    "observations": evaluation_details.get("observations") if evaluation_details else [],
+                }
 
         payload = {
             "result": result_data,

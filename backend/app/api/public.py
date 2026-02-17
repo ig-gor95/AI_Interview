@@ -408,28 +408,30 @@ async def get_session_results(
     simulation_info = None
     if scenario := getattr(session, "simulation_scenario", None):
         dialog_items = sorted(getattr(scenario, "dialog", None) or [], key=lambda d: getattr(d, "order_index", 0))
-        simulation_info = {
-            "situation": getattr(scenario, "scenario_description", "") or "",
-            "dialog": [
-                {
-                    "role": getattr(d, "role", "ai"),
-                    "message": getattr(d, "message_text", ""),
-                    "tone": getattr(d, "tone", None),
-                }
-                for d in dialog_items
-            ],
-            "summary": []  # We can add summary from evaluation observations if needed
-        }
+        # Only include simulation if there's actual dialog (not just scenario creation)
+        if dialog_items:
+            simulation_info = {
+                "situation": getattr(scenario, "scenario_description", "") or "",
+                "dialog": [
+                    {
+                        "role": getattr(d, "role", "ai"),
+                        "message": getattr(d, "message_text", ""),
+                        "tone": getattr(d, "tone", None),
+                    }
+                    for d in dialog_items
+                ],
+                "summary": []  # We can add summary from evaluation observations if needed
+            }
 
-        # Add evaluation observations as summary if available
-        if evaluation and hasattr(evaluation, 'observations'):
-            for obs in evaluation.observations:
-                # Categorize observations into positive/warning/negative
-                obs_type = "positive" if obs.category in ["positive", "strength"] else "warning"
-                simulation_info["summary"].append({
-                    "type": obs_type,
-                    "text": obs.observation_text
-                })
+            # Add evaluation observations as summary if available
+            if evaluation and hasattr(evaluation, 'observations'):
+                for obs in evaluation.observations:
+                    # Categorize observations into positive/warning/negative
+                    obs_type = "positive" if obs.category in ["positive", "strength"] else "warning"
+                    simulation_info["summary"].append({
+                        "type": obs_type,
+                        "text": obs.observation_text
+                    })
 
     # Check if evaluation is still in progress
     is_evaluating = session.evaluation_status in [EvaluationStatus.PENDING, EvaluationStatus.IN_PROGRESS]
