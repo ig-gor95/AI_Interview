@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     # Security
     secret_key: str = "test-secret-key"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 720  # 12 hours
     
     # CORS
     cors_origins: str = "http://localhost:5173"
