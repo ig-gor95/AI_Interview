@@ -270,11 +270,20 @@ async def generate_evaluation_from_transcript(
     if isinstance(evaluation_criteria, str):
         evaluation_criteria = [evaluation_criteria]
     
-    gpt_result = await ai_service.analyze_transcript(
-        transcript=transcript,
-        session_params=session_params,
-        evaluation_criteria=evaluation_criteria,
-    )
+    # Add timeout to prevent evaluation from hanging indefinitely
+    import asyncio
+    try:
+        gpt_result = await asyncio.wait_for(
+            ai_service.analyze_transcript(
+                transcript=transcript,
+                session_params=session_params,
+                evaluation_criteria=evaluation_criteria,
+            ),
+            timeout=180.0  # 3 minutes timeout for AI analysis
+        )
+    except asyncio.TimeoutError:
+        print(f"[Evaluation] ERROR: AI analysis timed out after 180 seconds for session {session.id}")
+        raise RuntimeError("AI analysis timed out after 3 minutes")
 
     criterion_results_raw = gpt_result.get("criterionResults") or []
     # Явно залогировать, если GPT вернул невалидный JSON и подставился fallback (все "Evaluation incomplete")
