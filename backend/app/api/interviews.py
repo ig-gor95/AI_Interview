@@ -264,14 +264,22 @@ async def create_interview(
     share_url = f"/session/{uuid.uuid4()}"
     
     # Create interview with default values for fields not in the form
+    # Map language from params ('ru' or 'en') to Language enum
+    language_enum = Language.RU  # Default
+    if session_data.params.language:
+        if session_data.params.language.lower() == 'en':
+            language_enum = Language.EN
+        elif session_data.params.language.lower() == 'ru':
+            language_enum = Language.RU
+
     new_interview = Interview(
         organizer_id=current_user.id,
         title=session_data.params.position,  # Use position as title
         position=session_data.params.position,
         company=session_data.params.company,
         difficulty=Difficulty.INTERMEDIATE,  # Default value
-        duration=15,  # Default value
-        language=Language.RU,  # Default value
+        duration=session_data.params.duration or 15,  # Use params duration or default
+        language=language_enum,
         personality=Personality.PROFESSIONAL,  # Default value
         share_url=share_url,
         is_active=True
@@ -408,6 +416,17 @@ async def update_interview(
     interview.title = session_data.params.position
     interview.position = session_data.params.position
     interview.company = session_data.params.company
+
+    # Update language from params
+    if session_data.params.language:
+        if session_data.params.language.lower() == 'en':
+            interview.language = Language.EN
+        elif session_data.params.language.lower() == 'ru':
+            interview.language = Language.RU
+
+    # Update duration from params
+    if session_data.params.duration:
+        interview.duration = session_data.params.duration
 
     # Check if there are completed sessions for this interview
     from app.models.session import Session
