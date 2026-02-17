@@ -217,9 +217,9 @@ function AppContent() {
     navigate('/');
   };
 
-  const refreshSessions = () => {
+  const refreshSessions = async () => {
     if (user?.role === 'organizer') {
-      loadInterviews();
+      await loadInterviews();
     } else {
       setSessions(getSessions());
     }
