@@ -197,6 +197,7 @@ async def get_interviews_summary(
         return []
 
     # Get candidates count for all interviews in one query
+    # Count sessions that are in progress or completed (exclude pending and abandoned)
     interview_ids = [interview.id for interview in interviews]
     candidates_count_result = await db.execute(
         select(
@@ -204,7 +205,7 @@ async def get_interviews_summary(
             func.count(Session.id).label('count')
         )
         .where(Session.interview_id.in_(interview_ids))
-        .where(Session.status == SessionStatus.COMPLETED)
+        .where(Session.status.in_([SessionStatus.IN_PROGRESS, SessionStatus.COMPLETED]))
         .group_by(Session.interview_id)
     )
 
