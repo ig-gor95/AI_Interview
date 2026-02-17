@@ -83,13 +83,47 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
     };
   }, [sessionId, mockResult]);
 
+  // Load transcript separately
+  const loadTranscript = async () => {
+    try {
+      setIsLoadingTranscript(true);
+      const transcriptRes = await resultsAPI.getCandidateTranscript(sessionId);
+      setTranscript(transcriptRes.messages || []);
+    } catch (err) {
+      console.error('Failed to load transcript:', err);
+    } finally {
+      setIsLoadingTranscript(false);
+    }
+  };
+
+  // Manual retry function
+  const handleRetryEvaluation = async () => {
+    try {
+      setEvaluationStatus('in_progress');
+      fetchedRef.current = null;
+      setIsLoading(true);
+      const res = await resultsAPI.getCandidateDetail(sessionId);
+      setResult(res.result);
+      setEvaluation(res.evaluation);
+      setInterview(res.interview);
+      setSimulation(res.simulation ?? null);
+      setEvaluationStatus(res.result?.evaluationStatus || 'pending');
+      if (res.result?.transcriptCount > 0) {
+        loadTranscript();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Auto-retry on FAILED status (only once per mount)
   useEffect(() => {
     if (evaluationStatus === 'failed' && !autoRetryTriggeredRef.current) {
       autoRetryTriggeredRef.current = true;
       // Trigger a reload which will auto-start background evaluation via GET endpoint
-      fetchedRef.current = null;
-      setEvaluationStatus('in_progress');
+      handleRetryEvaluation();
     }
   }, [evaluationStatus]);
 
@@ -186,7 +220,10 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   const followUpQuestions = evaluation?.improvements || [];
 
   // Recommendation text
-  const recommendation = isEvaluating
+  const isFailed = evaluationStatus === 'failed' && !evaluation;
+  const recommendation = isFailed
+    ? 'Не удалось сгенерировать оценку. Нажмите кнопку ниже для повторной попытки.'
+    : isEvaluating
     ? 'AI анализирует интервью...'
     : evaluation?.summary || evaluation?.recommendation ||
     (verdict === 'recommended'
@@ -246,6 +283,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
       simulation={simulationData}
       audioUrl={result?.audioUrl}
       onBack={onBack}
+      onRetryEvaluation={isFailed ? handleRetryEvaluation : undefined}
     />
   );
 }

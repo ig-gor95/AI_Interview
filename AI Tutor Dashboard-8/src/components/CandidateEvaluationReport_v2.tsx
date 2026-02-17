@@ -58,6 +58,9 @@ interface Props {
   simulation?: SimulationScenario;
   audioUrl?: string;
   onBack?: () => void;
+  isEvaluating?: boolean;
+  isLoadingTranscript?: boolean;
+  onRetryEvaluation?: () => void;
 }
 
 export function CandidateEvaluationReport_v2({
@@ -71,6 +74,9 @@ export function CandidateEvaluationReport_v2({
   simulation,
   audioUrl,
   onBack,
+  isEvaluating,
+  isLoadingTranscript,
+  onRetryEvaluation,
 }: Props) {
   const [language] = useAtom(languageAtom);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -273,6 +279,14 @@ export function CandidateEvaluationReport_v2({
             <p className="text-sm text-gray-800 leading-relaxed">
               {recommendation}
             </p>
+            {onRetryEvaluation && !isEvaluating && (
+              <button
+                onClick={onRetryEvaluation}
+                className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                🔄 Повторить анализ
+              </button>
+            )}
           </div>
         </div>
 
