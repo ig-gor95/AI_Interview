@@ -13,6 +13,7 @@ from app.models.interview import Interview, InterviewLink
 from app.models.session import (
     Session,
     SessionStatus,
+    EvaluationStatus,
     SessionEvaluation,
     SessionTranscript,
     SessionEvaluationCriterionResult,
@@ -430,6 +431,9 @@ async def get_session_results(
                     "text": obs.observation_text
                 })
 
+    # Check if evaluation is still in progress
+    is_evaluating = session.evaluation_status in [EvaluationStatus.PENDING, EvaluationStatus.IN_PROGRESS]
+
     return {
         "candidateName": f"{session.candidate_name} {session.candidate_surname or ''}".strip(),
         "role": interview_info["position"] if interview_info else "Кандидат",
@@ -437,6 +441,6 @@ async def get_session_results(
         "transcript": transcript_data,
         "evaluation": evaluation_data,
         "simulation": simulation_info,
-        "isEvaluating": False,  # Always false for completed sessions with results
+        "isEvaluating": is_evaluating,
         "isLoadingTranscript": False,
     }

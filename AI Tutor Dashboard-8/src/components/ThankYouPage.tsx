@@ -22,6 +22,20 @@ export function ThankYouPage() {
     loadResults();
   }, [token]);
 
+  // Poll for results if evaluation is in progress
+  useEffect(() => {
+    if (!results || !results.isEvaluating) {
+      return;
+    }
+
+    const pollInterval = setInterval(() => {
+      console.log('[ThankYouPage] Polling for evaluation results...');
+      loadResults();
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [results?.isEvaluating]);
+
   const loadResults = async () => {
     if (!token) return;
 
@@ -29,6 +43,7 @@ export function ThankYouPage() {
       setIsLoading(true);
       setError(null);
       const data = await publicAPI.getSessionResults(token);
+      console.log('[ThankYouPage] Loaded results:', { isEvaluating: data.isEvaluating, hasEvaluation: !!data.evaluation });
       setResults(data);
     } catch (error) {
       console.error('Ошибка при загрузке результатов:', error);
