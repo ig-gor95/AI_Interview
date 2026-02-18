@@ -392,22 +392,26 @@ Transcript:
             messages=messages,
             system_prompt=system_prompt,
             temperature=0.5,
-            max_tokens=2000
+            max_tokens=4000
         )
-        
+
         # Parse JSON response (DeepSeek sometimes wraps in markdown)
         import json
         import re
-        
+
         # Try to extract JSON from response
         json_match = re.search(r'\{.*\}', response, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group())
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"[GPT-Eval] JSON parse error: {e}")
+                print(f"[GPT-Eval] Raw response (first 1000 chars): {response[:1000]}")
                 pass
-        
+
         # Fallback: return structured response
+        print(f"[GPT-Eval] No valid JSON found in response. Using fallback.")
+        print(f"[GPT-Eval] Raw response: {response[:1000]}")
         fallback_criterion_scores = {c["criterion_name"]: {"score": 50, "justification": "Evaluation incomplete"} for c in criteria_objs}
         fallback_result = {
             "score": 75,

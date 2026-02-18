@@ -322,8 +322,8 @@ async def get_candidate_detail(
             }
             score = evaluation.overall_score
             quality_rating = score_to_quality_rating(score)
-        elif session.evaluation_status in (EvaluationStatus.FAILED, EvaluationStatus.PENDING, None):
-            # Auto-trigger background evaluation on FAILED/PENDING/None
+        elif session.evaluation_status in (EvaluationStatus.PENDING, None):
+            # Auto-trigger background evaluation on PENDING/None (but NOT on FAILED to prevent infinite retry loop)
             print(f"[get_candidate_detail] Triggering evaluation for session {session.id}, status: {session.evaluation_status}")
             session.evaluation_status = EvaluationStatus.IN_PROGRESS
             await db.commit()
@@ -332,6 +332,12 @@ async def get_candidate_detail(
             _background_tasks.add(task)
             task.add_done_callback(lambda t: _background_tasks.discard(t))
             # Return partial response: evaluation=None, transcript + criteria available
+            evaluation_details = None
+            score = None
+            quality_rating = None
+        elif session.evaluation_status == EvaluationStatus.FAILED:
+            # FAILED status - don't auto-retry, just return failed status to frontend
+            print(f"[get_candidate_detail] Session {session.id} evaluation FAILED. Not auto-retrying.")
             evaluation_details = None
             score = None
             quality_rating = None
