@@ -266,11 +266,16 @@ async def create_interview(
     # Create interview with default values for fields not in the form
     # Map language from params ('ru' or 'en') to Language enum
     language_enum = Language.RU  # Default
-    if session_data.params.language:
+    if hasattr(session_data.params, 'language') and session_data.params.language:
         if session_data.params.language.lower() == 'en':
             language_enum = Language.EN
         elif session_data.params.language.lower() == 'ru':
             language_enum = Language.RU
+
+    # Get duration with default fallback
+    duration = 15  # Default
+    if hasattr(session_data.params, 'duration') and session_data.params.duration:
+        duration = session_data.params.duration
 
     new_interview = Interview(
         organizer_id=current_user.id,
@@ -278,7 +283,7 @@ async def create_interview(
         position=session_data.params.position,
         company=session_data.params.company,
         difficulty=Difficulty.INTERMEDIATE,  # Default value
-        duration=session_data.params.duration or 15,  # Use params duration or default
+        duration=duration,
         language=language_enum,
         personality=Personality.PROFESSIONAL,  # Default value
         share_url=share_url,

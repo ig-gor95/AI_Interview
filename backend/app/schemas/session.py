@@ -42,6 +42,8 @@ class SessionParams(BaseModel):
     # Информация о вакансии
     position: str  # Название вакансии (обязательное)
     company: Optional[str] = None  # Название компании (опциональное)
+    language: Optional[str] = None  # Язык интервью ('ru' или 'en')
+    duration: Optional[int] = None  # Длительность интервью в минутах
 
     # Базовые вопросы для первичного отбора
     questions: List[Question]  # Вопросы с возможностью уточняющих вопросов (обязательное)
