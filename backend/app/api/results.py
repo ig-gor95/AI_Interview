@@ -588,3 +588,50 @@ async def get_audio_file(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error serving audio file: {str(e)}")
+
+
+@router.post("/candidates/{session_id}/retry-evaluation")
+async def retry_evaluation(
+    session_id: str,
+    current_user: User = Depends(get_current_organizer),
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually retry evaluation for a failed session"""
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id format")
+
+    try:
+        # Get session with interview join for access check
+        result = await db.execute(
+            select(Session)
+            .join(Interview, Session.interview_id == Interview.id)
+            .where(Session.id == session_uuid)
+            .where(Interview.organizer_id == current_user.id)
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Reset evaluation status to pending to trigger re-evaluation
+        print(f"[retry_evaluation] Manually resetting evaluation status to PENDING for session {session.id}")
+        session.evaluation_status = EvaluationStatus.PENDING
+        await db.commit()
+
+        # Refresh session to get updated status
+        await db.refresh(session)
+
+        return JSONResponse(
+            content={
+                "message": "Evaluation retry initiated",
+                "sessionId": str(session.id),
+                "evaluationStatus": session.evaluation_status.value
+            },
+            status_code=200
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrying evaluation: {str(e)}")

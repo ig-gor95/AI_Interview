@@ -100,8 +100,15 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
   const handleRetryEvaluation = async () => {
     try {
       setEvaluationStatus('in_progress');
-      fetchedRef.current = null;
       setIsLoading(true);
+
+      // Call the retry endpoint to reset status to pending
+      await resultsAPI.retryCandidateEvaluation(sessionId);
+
+      // Reset fetch ref to allow re-fetching
+      fetchedRef.current = null;
+
+      // Now fetch the updated data (which will trigger evaluation)
       const res = await resultsAPI.getCandidateDetail(sessionId);
       setResult(res.result);
       setEvaluation(res.evaluation);
@@ -118,14 +125,7 @@ export function CandidateEvaluationWrapper({ sessionId, session, user, mockResul
     }
   };
 
-  // Auto-retry on FAILED status (only once per mount)
-  useEffect(() => {
-    if (evaluationStatus === 'failed' && !autoRetryTriggeredRef.current) {
-      autoRetryTriggeredRef.current = true;
-      // Trigger a reload which will auto-start background evaluation via GET endpoint
-      handleRetryEvaluation();
-    }
-  }, [evaluationStatus]);
+  // Note: Auto-retry on FAILED removed - user must manually click retry button
 
   // Polling for in_progress evaluations
   useEffect(() => {

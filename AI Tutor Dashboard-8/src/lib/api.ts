@@ -281,6 +281,16 @@ export const resultsAPI = {
       hasMore: boolean;
     }>(`/results/candidates/${sessionId}/transcript?offset=${offset}&limit=${limit}`);
   },
+
+  async retryCandidateEvaluation(sessionId: string) {
+    return apiRequest<{
+      message: string;
+      sessionId: string;
+      evaluationStatus: string;
+    }>(`/results/candidates/${sessionId}/retry-evaluation`, {
+      method: 'POST',
+    });
+  },
 };
 
 // Public API (no authentication required)
