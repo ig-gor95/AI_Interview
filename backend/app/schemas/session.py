@@ -119,7 +119,9 @@ class InterviewContext(BaseModel):
     instructions: Optional[str] = None
     allow_dynamic_questions: bool = Field(alias="allowDynamicQuestions", default=False)
     customer_simulation: Optional[CustomerSimulation] = Field(None, alias="customerSimulation")
-    
+    evaluation_criteria_must_have: Optional[List[str]] = Field(None, alias="evaluationCriteriaMustHave")
+    evaluation_criteria_nice_to_have: Optional[List[str]] = Field(None, alias="evaluationCriteriaNiceToHave")
+
     class Config:
         populate_by_name = True
 

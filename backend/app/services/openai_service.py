@@ -325,6 +325,15 @@ IMPORTANT NOTE ABOUT SPEECH RECOGNITION:
 - When analyzing, try to understand the candidate's intent and infer the correct spelling of technical terms
 - Focus on the content and meaning rather than exact wording
 
+CRITICAL RULE FOR EVALUATION CRITERIA:
+- You can ONLY evaluate criteria that were actually checked during the interview
+- If a criterion was NOT mentioned or checked in the interview questions, you MUST mark it as:
+  * passes: 0 (unknown/not checked)
+  * justification: "Критерий не был проверен в ходе интервью"
+- DO NOT make negative conclusions about criteria that were not checked
+- DO NOT assume candidate doesn't meet a criterion just because it wasn't asked
+- ONLY evaluate criteria where you have actual evidence from candidate's responses
+
 For each criterion: (1) Determine if the candidate meets the criterion using a 3-level scale:
   1 = подходит (clearly meets the criterion)
   0 = возможно подойдет (partially meets or unclear)
@@ -781,7 +790,30 @@ Transcript:
         
         prompt = f"""Ты - Анна, приятная AI-интервьюер (женщина), проводящая скрининг-собеседование в компанию {interview.company or "компанию"} на позицию {interview.position}.
 
-ВАЖНО: Это скрининг-собеседование (первичный отбор), а не полное интервью. Цель - быстро оценить базовые компетенции, мотивацию и коммуникативные навыки кандидата.
+ВАЖНО: Это скрининг-собеседование (первичный отбор), а не полное интервью. Цель - быстро оценить базовые компетенции, мотивацию и коммуникативные навыки кандидата."""
+
+        # Добавляем информацию о критериях оценки
+        must_have = getattr(interview, 'evaluation_criteria_must_have', None) or []
+        nice_to_have = getattr(interview, 'evaluation_criteria_nice_to_have', None) or []
+
+        if must_have or nice_to_have:
+            prompt += "\n\nКРИТЕРИИ ОЦЕНКИ КАНДИДАТА:"
+
+        if must_have:
+            prompt += "\n\nОБЯЗАТЕЛЬНЫЕ КРИТЕРИИ (must-have) - КРИТИЧЕСКИ ВАЖНО ПРОВЕРИТЬ ВСЕ:"
+            for i, criterion in enumerate(must_have, 1):
+                prompt += f"\n{i}. {criterion}"
+            prompt += "\n\nВАЖНО: Ты ОБЯЗАН задать вопросы, чтобы проверить ВСЕ обязательные критерии."
+            prompt += "\nЕсли основные вопросы из шаблона не покрывают какой-то обязательный критерий - задай дополнительный уточняющий вопрос."
+            prompt += "\nНЕ делай выводов о критерии, если не задал вопрос для его проверки!"
+
+        if nice_to_have:
+            prompt += "\n\nЖЕЛАТЕЛЬНЫЕ КРИТЕРИИ (nice-to-have) - проверяй по возможности:"
+            for i, criterion in enumerate(nice_to_have, 1):
+                prompt += f"\n{i}. {criterion}"
+            prompt += "\nЭти критерии желательно проверить, но не обязательно. Если времени мало или кандидат уже много рассказал - можно пропустить."
+
+        prompt += """
 
 ОСОБЕННОСТИ РАСПОЗНАВАНИЯ РЕЧИ:
 - Ответы кандидата получены через голосовое распознавание речи (Speech-to-Text)

@@ -1121,6 +1121,16 @@ async def _build_gpt_context(
                 scenario=cs_data.get("scenario")
             )
     
+    # Собираем критерии оценки
+    must_have_criteria = []
+    nice_to_have_criteria = []
+    if interview.evaluation_criteria:
+        for criterion in interview.evaluation_criteria:
+            if criterion.is_required:
+                must_have_criteria.append(criterion.criterion_name)
+            else:
+                nice_to_have_criteria.append(criterion.criterion_name)
+
     interview_context = InterviewContext(
         id=str(interview.id),
         topic=interview.title,
@@ -1131,7 +1141,9 @@ async def _build_gpt_context(
         duration=interview.duration,
         instructions=interview.config.additional_instructions if interview.config else None,
         allow_dynamic_questions=interview.config.allow_dynamic_questions if interview.config else False,
-        customer_simulation=customer_simulation
+        customer_simulation=customer_simulation,
+        evaluation_criteria_must_have=must_have_criteria if must_have_criteria else None,
+        evaluation_criteria_nice_to_have=nice_to_have_criteria if nice_to_have_criteria else None
     )
     
     # Get current interview question (if any)
