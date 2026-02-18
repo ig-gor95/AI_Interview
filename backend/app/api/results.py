@@ -615,6 +615,16 @@ async def retry_evaluation(
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
+        # Delete existing evaluation if it exists (to avoid duplicate key error)
+        existing_eval_result = await db.execute(
+            select(SessionEvaluation).where(SessionEvaluation.session_id == session_uuid)
+        )
+        existing_eval = existing_eval_result.scalar_one_or_none()
+        if existing_eval:
+            print(f"[retry_evaluation] Deleting existing evaluation for session {session.id}")
+            await db.delete(existing_eval)
+            await db.flush()
+
         # Reset evaluation status to pending to trigger re-evaluation
         print(f"[retry_evaluation] Manually resetting evaluation status to PENDING for session {session.id}")
         session.evaluation_status = EvaluationStatus.PENDING

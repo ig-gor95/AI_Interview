@@ -123,7 +123,7 @@ class SessionEvaluation(Base):
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), unique=True, nullable=False, index=True)
     overall_score = Column(Integer, nullable=False)  # финальный балл (0-100)
     summary = Column(Text, nullable=True)  # краткое резюме интервью
-    readiness = Column(String(500), nullable=True)  # готовность к работе
+    readiness = Column(Text, nullable=True)  # готовность к работе (changed from String(500))
     recommendation = Column(Text, nullable=True)  # рекомендация HR
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
