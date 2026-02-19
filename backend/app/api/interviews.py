@@ -707,6 +707,7 @@ async def get_interview_links(
             "interviewId": str(link.interview_id),
             "token": link.token,
             "isUsed": link.is_used,
+            "isReusable": link.is_reusable,
             "expiresAt": link.expires_at.isoformat() if link.expires_at else None,
             "sessionId": str(link.session_id) if link.session_id else None,
             "createdAt": link.created_at.isoformat(),

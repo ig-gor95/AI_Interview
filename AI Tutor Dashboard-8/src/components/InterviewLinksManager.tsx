@@ -36,12 +36,15 @@ export function InterviewLinksManager({ session, onBack, onViewCandidates }: Pro
       
       const fetchedLinks = await interviewsAPI.getLinks(session.id);
       // Transform API response to match InterviewLink type
-      setLinks(fetchedLinks.map(link => ({
+      // Filter out reusable links (QR codes) - show only unique links
+      const uniqueLinks = fetchedLinks.filter(link => !link.isReusable);
+      setLinks(uniqueLinks.map(link => ({
         id: link.id,
         interviewId: link.interviewId,
         token: link.token,
         url: link.url,
         isUsed: link.isUsed,
+        isReusable: link.isReusable,
         createdAt: link.createdAt,
         expiresAt: link.expiresAt || undefined,
         sessionId: link.sessionId || undefined,

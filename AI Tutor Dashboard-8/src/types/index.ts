@@ -91,5 +91,6 @@ export interface InterviewLink {
   candidateName?: string;
   candidateEmail?: string;
   isUsed: boolean;
+  isReusable?: boolean; // многоразовая ссылка (для QR-кодов)
   notes?: string;
 }

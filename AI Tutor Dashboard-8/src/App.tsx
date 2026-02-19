@@ -16,6 +16,7 @@ import { EvaluationDemo } from './components/EvaluationDemo';
 import { CandidateRegistration } from './components/CandidateRegistration';
 import { InterviewCandidatesPage } from './components/InterviewCandidatesPage';
 import { ThankYouPage } from './components/ThankYouPage';
+import { InterviewLinksManager } from './components/InterviewLinksManager';
 import { JotaiProvider } from './components/JotaiProvider';
 
 // User context wrapper
@@ -300,11 +301,35 @@ function AppContent() {
         onRefresh={refreshSessions}
         onViewEvaluation={(sessionId) => navigate(`/evaluation/${sessionId}`)}
         onViewCandidates={(interviewId) => navigate(`/interview/${interviewId}/candidates`)}
+        onManageLinks={(interviewId) => navigate(`/interview/${interviewId}/links`)}
       />
     ) : (
       <StudentDashboard
         user={user}
         onOpenSession={(sessionId) => navigate(`/session/${sessionId}`)}
+      />
+    );
+  };
+
+  // Interview Links Page Component
+  const InterviewLinksPage = () => {
+    const { interviewId } = useParams<{ interviewId: string }>();
+
+    if (!interviewId) {
+      return <Navigate to="/dashboard" replace />;
+    }
+
+    const session = sessions.find(s => s.id === interviewId);
+
+    if (!session) {
+      return <Navigate to="/dashboard" replace />;
+    }
+
+    return (
+      <InterviewLinksManager
+        session={session}
+        onBack={() => navigate('/dashboard')}
+        onViewCandidates={(id) => navigate(`/interview/${id}/candidates`)}
       />
     );
   };
@@ -367,12 +392,13 @@ function AppContent() {
   // Header wrapper component to check location
   const HeaderWrapper = ({ children }: { children: React.ReactNode }) => {
     const location = useLocation();
-    
+
     const shouldShowHeader = () => {
-      return location.pathname.startsWith('/dashboard') || 
-             location.pathname.startsWith('/session/') || 
+      return location.pathname.startsWith('/dashboard') ||
+             location.pathname.startsWith('/session/') ||
              location.pathname.startsWith('/evaluation/') ||
-             /^\/interview\/[^/]+\/candidates$/.test(location.pathname);
+             /^\/interview\/[^/]+\/candidates$/.test(location.pathname) ||
+             /^\/interview\/[^/]+\/links$/.test(location.pathname);
     };
 
     return (
@@ -416,6 +442,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <InterviewCandidatesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/interview/:interviewId/links"
+          element={
+            <ProtectedRoute>
+              <InterviewLinksPage />
             </ProtectedRoute>
           }
         />

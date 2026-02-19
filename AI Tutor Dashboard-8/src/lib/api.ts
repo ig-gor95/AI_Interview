@@ -139,16 +139,17 @@ export const interviewsAPI = {
     });
   },
 
-  async createLink(interviewId: string) {
+  async createLink(interviewId: string, reusable: boolean = false) {
     return apiRequest<{
       id: string;
       interviewId: string;
       token: string;
       isUsed: boolean;
+      isReusable: boolean;
       expiresAt: string | null;
       createdAt: string;
       url: string;
-    }>(`/interviews/${interviewId}/links`, {
+    }>(`/interviews/${interviewId}/links?reusable=${reusable}`, {
       method: 'POST',
     });
   },
@@ -159,6 +160,7 @@ export const interviewsAPI = {
       interviewId: string;
       token: string;
       isUsed: boolean;
+      isReusable: boolean;
       expiresAt: string | null;
       sessionId: string | null;
       createdAt: string;

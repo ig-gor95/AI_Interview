@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Link as LinkIcon, Target, Copy, Check, BarChart3, Users, MessageSquare, Video, ChevronDown, TrendingUp, TrendingDown, Search, Download, Mail, Phone, QrCode, X, Send, HelpCircle, Edit2, Trash2 } from 'lucide-react';
 import { Session, SessionParams, User } from '../types/index';
 import { InterviewForm } from './InterviewForm';
-import { InterviewLinksManager } from './InterviewLinksManager';
 import { getTopCandidatesPercentage, scoreToQualityRating } from '../lib/qualityRating';
 import QRCode from 'qrcode';
 import { useAtom } from 'jotai';
@@ -14,18 +13,18 @@ interface Props {
   sessions: Session[];
   results: any[];
   onRefresh: () => void;
-  onOpenSession: (sessionId: string) => void;
+  onOpenSession?: (sessionId: string) => void;
   onViewEvaluation?: (sessionId: string) => void;
   onViewCandidates?: (interviewId: string) => void;
+  onManageLinks?: (interviewId: string) => void;
   currentTab?: 'manage' | 'students';
   onTabChange?: (tab: 'manage' | 'students') => void;
 }
 
-export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenSession, onViewEvaluation, onViewCandidates }: Props) {
+export function OrganizerDashboard({ user, sessions, results, onRefresh, onViewEvaluation, onViewCandidates, onManageLinks }: Props) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [qrLinkCopied, setQrLinkCopied] = useState(false);
-  const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
   const [qrInterviewUrl, setQrInterviewUrl] = useState<string>('');
@@ -188,12 +187,6 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {selectedSessionForLinks ? (
-        <InterviewLinksManager
-          session={selectedSessionForLinks}
-          onBack={() => setSelectedSessionForLinks(null)}
-        />
-      ) : (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -560,7 +553,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                       {/* Primary Actions - Top Row */}
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setSelectedSessionForLinks(session)}
+                          onClick={() => onManageLinks && onManageLinks(session.id)}
                           className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2 text-sm font-medium"
                         >
                           <LinkIcon className="w-4 h-4" />
@@ -926,7 +919,6 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
           </div>
         )}
       </div>
-      )}
     </div>
   );
 }
