@@ -612,7 +612,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                             // Create reusable QR link via API
                             try {
                               const link = await interviewsAPI.createLink(session.id, true);
-                              generateQRCode(link.url);
+                              await generateQRCode(link.url);
                               setQrInterviewUrl(link.url);
                               setSelectedSessionForQR(session);
                               setShowQRModal(true);
