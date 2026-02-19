@@ -28,6 +28,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
   const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+  const [qrInterviewUrl, setQrInterviewUrl] = useState<string>('');
   const [selectedSessionForQR, setSelectedSessionForQR] = useState<Session | null>(null);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [selectedPositionFilter, setSelectedPositionFilter] = useState<string>('all');
