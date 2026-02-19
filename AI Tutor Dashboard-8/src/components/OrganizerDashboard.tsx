@@ -591,9 +591,15 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                       {/* Secondary Actions - Bottom Row */}
                       <div className="flex gap-2">
                         <button
-                          onClick={() => {
-                            // Open test mode in new window
-                            window.open(`${window.location.origin}${session.shareUrl}?test=true`, '_blank');
+                          onClick={async () => {
+                            // Create test link via API and open in new window
+                            try {
+                              const link = await interviewsAPI.createLink(session.id, false);
+                              window.open(`${window.location.origin}${link.url}?test=true`, '_blank');
+                            } catch (error) {
+                              console.error('Error creating test link:', error);
+                              alert(language === 'ru' ? 'Ошибка создания ссылки' : 'Error creating link');
+                            }
                           }}
                           className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
@@ -602,10 +608,18 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                         </button>
 
                         <button
-                          onClick={() => {
-                            generateQRCode(session.shareUrl);
-                            setSelectedSessionForQR(session);
-                            setShowQRModal(true);
+                          onClick={async () => {
+                            // Create reusable QR link via API
+                            try {
+                              const link = await interviewsAPI.createLink(session.id, true);
+                              generateQRCode(link.url);
+                              setQrInterviewUrl(link.url);
+                              setSelectedSessionForQR(session);
+                              setShowQRModal(true);
+                            } catch (error) {
+                              console.error('Error creating QR link:', error);
+                              alert(language === 'ru' ? 'Ошибка создания QR-кода' : 'Error creating QR code');
+                            }
                           }}
                           className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
@@ -705,13 +719,13 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={`${window.location.origin}${selectedSessionForQR.shareUrl}`}
+                    value={`${window.location.origin}${qrInterviewUrl}`}
                     readOnly
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
                   />
                   <button
                     onClick={() => {
-                      const fullUrl = `${window.location.origin}${selectedSessionForQR.shareUrl}`;
+                      const fullUrl = `${window.location.origin}${qrInterviewUrl}`;
                       navigator.clipboard.writeText(fullUrl);
                       setQrLinkCopied(true);
                       setTimeout(() => setQrLinkCopied(false), 2000);
