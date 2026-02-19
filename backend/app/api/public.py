@@ -140,8 +140,8 @@ async def register_candidate(
             detail="Interview link has expired"
         )
     
-    # Check if link is already used
-    if link.is_used:
+    # Check if link is already used (skip check for reusable links like QR codes)
+    if link.is_used and not link.is_reusable:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Interview link has already been used"

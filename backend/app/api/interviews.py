@@ -596,10 +596,16 @@ async def get_interview(
 @router.post("/{interview_id}/links", status_code=status.HTTP_201_CREATED)
 async def create_interview_link(
     interview_id: str,
+    reusable: bool = False,  # For QR codes - can be used multiple times
     current_user: User = Depends(get_current_organizer),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate a link for candidate to access interview"""
+    """Generate a link for candidate to access interview
+
+    Args:
+        interview_id: Interview UUID
+        reusable: If True, creates a reusable link (for QR codes) that can be used multiple times
+    """
     try:
         interview_uuid = uuid.UUID(interview_id)
     except ValueError:
@@ -634,12 +640,13 @@ async def create_interview_link(
 
     # Generate unique token
     token = secrets.token_urlsafe(32)
-    
+
     # Create interview link
     interview_link = InterviewLink(
         interview_id=interview.id,
         token=token,
-        is_used=False
+        is_used=False,
+        is_reusable=reusable
     )
     
     db.add(interview_link)
@@ -651,6 +658,7 @@ async def create_interview_link(
         "interviewId": str(interview_link.interview_id),
         "token": interview_link.token,
         "isUsed": interview_link.is_used,
+        "isReusable": interview_link.is_reusable,
         "expiresAt": interview_link.expires_at.isoformat() if interview_link.expires_at else None,
         "createdAt": interview_link.created_at.isoformat(),
         "url": f"/interview/{interview_link.token}"

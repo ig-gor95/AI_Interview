@@ -156,6 +156,7 @@ class InterviewLink(Base):
     interview_id = Column(UUID(as_uuid=True), ForeignKey("interviews.id"), nullable=False, index=True)
     token = Column(String(500), unique=True, nullable=False, index=True)  # уникальный токен для URL
     is_used = Column(Boolean, default=False, nullable=False)  # использована ли ссылка
+    is_reusable = Column(Boolean, default=False, nullable=False)  # многоразовая ссылка (для QR-кодов)
     expires_at = Column(DateTime(timezone=True), nullable=True)  # срок действия
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=True, index=True)  # созданная сессия после регистрации
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -165,4 +166,4 @@ class InterviewLink(Base):
     session = relationship("Session", foreign_keys=[session_id], back_populates="link")
     
     def __repr__(self):
-        return f"<InterviewLink(id={self.id}, interview_id={self.interview_id}, token={self.token})>"
+        return f"<InterviewLink(id={self.id}, interview_id={self.interview_id}, token={self.token}, is_reusable={self.is_reusable})>"

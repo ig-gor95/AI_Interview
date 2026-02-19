@@ -24,6 +24,7 @@ interface Props {
 export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenSession, onViewEvaluation, onViewCandidates }: Props) {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [qrLinkCopied, setQrLinkCopied] = useState(false);
   const [selectedSessionForLinks, setSelectedSessionForLinks] = useState<Session | null>(null);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
@@ -590,7 +591,10 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                       {/* Secondary Actions - Bottom Row */}
                       <div className="flex gap-2">
                         <button
-                          onClick={() => onOpenSession(session.id)}
+                          onClick={() => {
+                            // Open test mode in new window
+                            window.open(`${window.location.origin}${session.shareUrl}?test=true`, '_blank');
+                          }}
                           className="flex-1 px-3 py-2.5 border border-gray-300 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:border-gray-400 hover:shadow-sm transition-all flex items-center justify-center gap-1.5 text-sm"
                         >
                           <Video className="w-4 h-4" />
@@ -706,10 +710,29 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onOpenS
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-50"
                   />
                   <button
-                    onClick={() => copyToClipboard(selectedSessionForQR.id, selectedSessionForQR.shareUrl)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      const fullUrl = `${window.location.origin}${selectedSessionForQR.shareUrl}`;
+                      navigator.clipboard.writeText(fullUrl);
+                      setQrLinkCopied(true);
+                      setTimeout(() => setQrLinkCopied(false), 2000);
+                    }}
+                    className={`px-4 py-2 border rounded-lg transition-all flex items-center gap-2 ${
+                      qrLinkCopied
+                        ? 'bg-green-50 border-green-300 text-green-700'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
                   >
-                    <Copy className="w-4 h-4" />
+                    {qrLinkCopied ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span className="text-sm font-medium">{language === 'ru' ? 'Скопировано!' : 'Copied!'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span className="text-sm">{language === 'ru' ? 'Копировать' : 'Copy'}</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
