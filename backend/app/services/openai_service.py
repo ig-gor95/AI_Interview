@@ -1030,8 +1030,10 @@ Transcript:
                     if not is_duplicate:
                         all_asked_questions.append(question_normalized)
         
-        is_first_message = len(context.conversation_history) == 0
-        print(f"[UserPrompt] conversation_history length: {len(context.conversation_history)}, is_first_message: {is_first_message}")
+        # Проверяем, первое ли это сообщение, по session_history (Q&A), а не по conversation_history
+        # conversation_history может быть пустым из-за задержки сохранения транскриптов
+        is_first_message = len(context.session_history) == 0 if context.session_history else True
+        print(f"[UserPrompt] conversation_history length: {len(context.conversation_history)}, session_history length: {len(context.session_history) if context.session_history else 0}, is_first_message: {is_first_message}")
         if is_first_message:
             prompt += "\n\nПервое сообщение: задай приветствие и спроси о готовности (не задавай вопрос из шаблона)."
         else:
