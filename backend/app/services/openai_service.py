@@ -1031,6 +1031,7 @@ Transcript:
                         all_asked_questions.append(question_normalized)
         
         is_first_message = len(context.conversation_history) == 0
+        print(f"[UserPrompt] conversation_history length: {len(context.conversation_history)}, is_first_message: {is_first_message}")
         if is_first_message:
             prompt += "\n\nПервое сообщение: задай приветствие и спроси о готовности (не задавай вопрос из шаблона)."
         else:
