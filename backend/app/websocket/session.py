@@ -1153,7 +1153,11 @@ async def _build_gpt_context(
     # Get current interview question (if any)
     main_questions = [q for q in interview.questions if q.parent_question_id is None]
     main_questions.sort(key=lambda x: x.order_index)
-    
+
+    print(f"[BuildContext] Interview {interview.id}: Found {len(main_questions)} main questions")
+    for idx, q in enumerate(main_questions):
+        print(f"[BuildContext]   Question {idx}: {q.question_text}")
+
     current_interview_question = None
     session_state = ws_manager.session_states.get(str(session.id), {})
     
@@ -1173,16 +1177,20 @@ async def _build_gpt_context(
             current_question_index = len(answered_main_questions)
             session_state["current_question_index"] = current_question_index
     
+    print(f"[BuildContext] Current question index: {current_question_index}, total questions: {len(main_questions)}")
+
     if current_question_index < len(main_questions):
         current_question = main_questions[current_question_index]
-        
+
+        print(f"[BuildContext] Selected question for index {current_question_index}: {current_question.question_text}")
+
         # Get clarifying questions
         clarifying_questions = [
-            q for q in interview.questions 
+            q for q in interview.questions
             if q.parent_question_id == current_question.id
         ]
         clarifying_questions.sort(key=lambda x: x.order_index)
-        
+
         current_interview_question = InterviewQuestionContext(
             id=str(current_question.id),
             text=current_question.question_text,
@@ -1190,6 +1198,8 @@ async def _build_gpt_context(
             clarifying_instructions=None,  # TODO: add to InterviewQuestion model if needed
             clarifying_questions=[q.question_text for q in clarifying_questions] if clarifying_questions else None
         )
+    else:
+        print(f"[BuildContext] All template questions asked (index {current_question_index} >= {len(main_questions)})")
     
     # Build user response
     user_response = None

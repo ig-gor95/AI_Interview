@@ -1036,6 +1036,7 @@ Transcript:
         else:
             if context.current_interview_question:
                 current_q = context.current_interview_question
+                print(f"[UserPrompt] Adding template question to prompt: '{current_q.text}' (index {current_q.order_index})")
                 prompt += f"\n\nСлед. вопрос шаблона ({current_q.order_index + 1}): {current_q.text}"
                 if current_q.clarifying_questions:
                     for i, cq in enumerate(current_q.clarifying_questions[:3], 1):
@@ -1064,6 +1065,7 @@ Transcript:
                 if already_asked_similar:
                     prompt += "\n(Похожий вопрос уже задан — переходи к следующему или заверши.)"
             else:
+                print(f"[UserPrompt] No current_interview_question - all template questions asked or none available")
                 prompt += "\n\nВСЕ ВОПРОСЫ ШАБЛОНА ЗАДАНЫ - СЛЕДУЙ ПРОТОКОЛУ ЗАВЕРШЕНИЯ (см. раздел 7):"
                 prompt += "\n\nШаг 1: Проверь ОБЯЗАТЕЛЬНЫЕ критерии (must-have):"
 
