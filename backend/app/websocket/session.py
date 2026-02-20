@@ -1046,8 +1046,12 @@ async def _handle_end_session(
     )
     interview_link = result.scalar_one_or_none()
     if interview_link:
-        interview_link.is_used = True
-        print(f"[SessionEnd] Marked link {interview_link.id} as used for session {session.id}")
+        # Only mark as used if it's not a reusable link (like QR codes)
+        if not interview_link.is_reusable:
+            interview_link.is_used = True
+            print(f"[SessionEnd] Marked link {interview_link.id} as used for session {session.id}")
+        else:
+            print(f"[SessionEnd] Skipped marking reusable link {interview_link.id} as used for session {session.id}")
 
     await db.commit()
 
