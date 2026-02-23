@@ -1072,7 +1072,20 @@ export function InterviewSessionView() {
       }
     }, 10000); // 10 second timeout
 
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: 16000,
+        channelCount: 1,
+        echoCancellation: true,      // Эхоподавление - убирает обратную связь
+        noiseSuppression: true,       // Шумоподавление - убирает фоновый шум (вентиляторы, клавиатура, улица)
+        autoGainControl: true,        // Автоматическая регулировка громкости - нормализует тихий/громкий микрофон
+        // Chrome-специфичные расширенные настройки для лучшего качества
+        googNoiseSuppression: true,   // Усиленное шумоподавление Chrome
+        googAutoGainControl: true,    // Chrome AGC - более агрессивная нормализация
+        googHighpassFilter: true,     // Фильтр низких частот - убирает гул и вибрации
+        googEchoCancellation: true,   // Chrome эхоподавление
+      } as MediaTrackConstraints
+    }).then((stream) => {
         sttMediaStreamRef.current = stream;
         const sampleRate = 16000;
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate });

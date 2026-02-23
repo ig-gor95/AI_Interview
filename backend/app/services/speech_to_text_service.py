@@ -84,10 +84,17 @@ def _run_streaming_recognize(
             language_code="ru-RU",
             alternative_language_codes=["en-US"],
             speech_contexts=speech_contexts,
+            # Модель для низкой задержки - критично для real-time распознавания
+            model="latest_short",  # Оптимизирована для коротких фраз и низкой задержки
+            # use_enhanced=True,  # Раскомментировать если нужно улучшенное качество (требует доп. оплату)
+            # Автоматическая пунктуация - улучшает читаемость без задержек
+            enable_automatic_punctuation=True,
         )
         streaming_config = speech.StreamingRecognitionConfig(
             config=config,
             interim_results=True,
+            # Отправлять промежуточные результаты как можно чаще для мгновенного отклика
+            single_utterance=False,  # Не останавливаться после одной фразы
         )
         requests = (
             speech.StreamingRecognizeRequest(audio_content=content)

@@ -3,6 +3,8 @@ import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from app.config import settings
 from app.services.speech_to_text_service import StreamingSpeechToText, create_streaming_stt
+from app.services.transcript_enhancer import enhance_transcript_fast, should_enhance
+from app.services.stt_metrics import stt_metrics
 
 _STT_LOG_PREFIX = "[STT-WS]"
 
@@ -14,6 +16,10 @@ async def handle_stt_websocket(websocket: WebSocket, session_id: str) -> None:
     """
     print(f"{_STT_LOG_PREFIX} session_id={session_id} connect")
     await websocket.accept()
+
+    # Track session start for metrics
+    stt_metrics.track_session_start(session_id)
+
     stt = create_streaming_stt(getattr(settings, "google_application_credentials", None))
     if not stt:
         print(f"{_STT_LOG_PREFIX} session_id={session_id} Speech-to-Text not available (google-cloud-speech or credentials)")
@@ -43,11 +49,30 @@ async def handle_stt_websocket(websocket: WebSocket, session_id: str) -> None:
                 print(f"{_STT_LOG_PREFIX} session_id={session_id} error -> client: {text[:200]}")
                 await websocket.send_json({"type": "error", "message": text})
                 break
+
+            # Enhance transcript (только для final results, не тормозит interim)
+            enhanced_text = text
+            was_enhanced = False
+            if should_enhance(text, is_final=(kind == "final")):
+                enhanced_text = enhance_transcript_fast(text)
+                was_enhanced = (enhanced_text != text)
+                if was_enhanced:
+                    # Логируем только когда есть изменения
+                    print(f"{_STT_LOG_PREFIX} session_id={session_id} enhanced: {text[:40]!r} -> {enhanced_text[:40]!r}")
+
+            # Track metrics
+            stt_metrics.track_result(
+                session_id=session_id,
+                kind=kind,
+                text_length=len(enhanced_text),
+                was_enhanced=was_enhanced
+            )
+
             result_count += 1
-            preview = (text[:60] + "…") if len(text) > 60 else text
+            preview = (enhanced_text[:60] + "…") if len(enhanced_text) > 60 else enhanced_text
             if result_count <= 3 or kind == "final" or result_count % 10 == 0:
                 print(f"{_STT_LOG_PREFIX} session_id={session_id} -> {kind}: {preview!r}")
-            await websocket.send_json({"type": kind, "text": text})
+            await websocket.send_json({"type": kind, "text": enhanced_text})
 
     try:
         result_task = asyncio.create_task(send_results())
@@ -77,4 +102,8 @@ async def handle_stt_websocket(websocket: WebSocket, session_id: str) -> None:
             except asyncio.CancelledError:
                 pass
         stt.join(timeout=2.0)
+
+        # Log session metrics summary
+        stt_metrics.log_session_summary(session_id)
+
         print(f"{_STT_LOG_PREFIX} session_id={session_id} closed")
