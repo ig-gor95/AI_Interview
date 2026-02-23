@@ -132,6 +132,13 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
             <div className="flex items-center gap-2 sm:gap-3">
               <LanguageSwitcher variant="light" size="sm" />
               <button
+                onClick={() => setShowContactModal(true)}
+                className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span className="hidden md:inline">Поддержка</span>
+              </button>
+              <button
                 onClick={() => onNavigate('login-student')}
                 className="hidden sm:flex px-3 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               >
