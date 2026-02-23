@@ -97,7 +97,7 @@ export function InterviewSessionView() {
   const speakLouderTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer to show "speak louder" notification
   const STT_CHUNK_BYTES = 640; // 20 ms at 16kHz mono 16-bit (very fast streaming for Google Cloud)
 
-  const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
+  const SILENCE_TIMEOUT_MS = 10000; // 10 секунд молчания = автоматическая остановка
   const SPEAK_LOUDER_TIMEOUT_MS = 3500; // 3.5 секунды без результатов = показать "говорите громче"
 
   const FILLER_PHRASE_COUNT = 5;
@@ -1741,23 +1741,30 @@ export function InterviewSessionView() {
             {recordingNotification.type && (
               <div className={`absolute top-4 left-4 right-4 px-4 py-3 backdrop-blur-md rounded-xl z-10 shadow-lg ${
                 recordingNotification.type === 'speak-louder'
-                  ? 'bg-amber-500/90'
+                  ? 'bg-orange-500'
                   : 'bg-blue-600/90'
               }`}>
                 <div className="flex items-start gap-3">
                   {recordingNotification.type === 'speak-louder' ? (
-                    <Mic className="w-5 h-5 text-white flex-shrink-0 mt-0.5 animate-pulse" />
+                    <Mic className="w-5 h-5 text-black flex-shrink-0 mt-0.5 animate-pulse" />
                   ) : (
                     <AlertCircle className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />
                   )}
                   <div className="flex-1">
-                    <p className="text-sm text-white font-medium leading-relaxed">
+                    <p className={`text-sm font-medium leading-relaxed ${
+                      recordingNotification.type === 'speak-louder'
+                        ? 'text-black'
+                        : 'text-white'
+                    }`}>
                       {recordingNotification.message}
                     </p>
                   </div>
                   <button
                     onClick={() => setRecordingNotification({type: null, message: ''})}
-                    className="text-white/70 hover:text-white transition-colors"
+                    className={recordingNotification.type === 'speak-louder'
+                      ? 'text-black/70 hover:text-black transition-colors'
+                      : 'text-white/70 hover:text-white transition-colors'
+                    }
                   >
                     <X className="w-4 h-4" />
                   </button>
