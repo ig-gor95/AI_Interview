@@ -44,7 +44,7 @@ runcmd:
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
   # Создание директории для приложения
-  - mkdir -p /opt/apps
+  - mkdir -p /opt/appsf
   - chmod 755 /opt/apps
 
   # Настройка системных лимитов для Docker
