@@ -1059,6 +1059,13 @@ export function InterviewSessionView() {
         const textReceived = finalTranscriptRef.current.trim().length > existingText.length;
         if (!textReceived) {
           console.warn('[Frontend] STT: No results for 10s, falling back to browser STT');
+
+          // Show "speak louder" notification before fallback
+          setRecordingNotification({
+            type: 'speak-louder',
+            message: 'Микрофон не слышит речь. Говорите громче или проверьте микрофон'
+          });
+
           setShowSttWarning(true);
 
           // Stop backend STT
