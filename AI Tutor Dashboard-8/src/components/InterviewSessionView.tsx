@@ -66,6 +66,7 @@ export function InterviewSessionView() {
   const [visibleCharCount, setVisibleCharCount] = useState(0);
   const [sttMethod, setSttMethod] = useState<'backend' | 'browser' | null>(null);
   const [showSttWarning, setShowSttWarning] = useState(false);
+  const [recordingNotification, setRecordingNotification] = useState<{type: 'speak-louder' | 'paused' | null, message: string}>({type: null, message: ''});
 
   const wsRef = useRef<WebSocket | null>(null);
   const typewriterIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -93,9 +94,11 @@ export function InterviewSessionView() {
   const handleWebSocketMessageRef = useRef<((data: any) => void) | null>(null);
   const confirmedTextLengthRef = useRef(0); // Track length of confirmed (final) text to separate from interim
   const wasRecordingBeforeMuteRef = useRef(false); // Track if recording was active before mute
+  const speakLouderTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer to show "speak louder" notification
   const STT_CHUNK_BYTES = 640; // 20 ms at 16kHz mono 16-bit (very fast streaming for Google Cloud)
 
   const SILENCE_TIMEOUT_MS = 6000; // 6 секунд молчания = автоматическая остановка
+  const SPEAK_LOUDER_TIMEOUT_MS = 3500; // 3.5 секунды без результатов = показать "говорите громче"
 
   const FILLER_PHRASE_COUNT = 5;
   const FILLER_DELAY_MS = 3500;
@@ -1008,6 +1011,24 @@ export function InterviewSessionView() {
   function startBackendSttWithConnection(ws: WebSocket, isResume?: boolean) {
     useBackendSttRef.current = true;
     updateListeningState(true);
+
+    // Clear any previous notifications when starting/resuming recording
+    setRecordingNotification({type: null, message: ''});
+
+    // Start timer to show "speak louder" if no STT results in 3.5 seconds
+    if (speakLouderTimerRef.current) {
+      clearTimeout(speakLouderTimerRef.current);
+    }
+    speakLouderTimerRef.current = setTimeout(() => {
+      if (useBackendSttRef.current && isListeningRef.current) {
+        console.log('[Frontend] No STT results for 3.5s - showing speak louder notification');
+        setRecordingNotification({
+          type: 'speak-louder',
+          message: 'Говорите громче или ближе к микрофону'
+        });
+      }
+    }, SPEAK_LOUDER_TIMEOUT_MS);
+
     // ALWAYS preserve text if it exists - never clear finalTranscriptRef unless explicitly sending
     const existingText = finalTranscriptRef.current.trim();
     console.log('[Frontend] startBackendSttWithConnection - isResume:', isResume, 'existingText:', existingText);
@@ -1157,6 +1178,14 @@ export function InterviewSessionView() {
         clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = null;
       }
+      // Clear "speak louder" timer since we got results
+      if (speakLouderTimerRef.current) {
+        clearTimeout(speakLouderTimerRef.current);
+        speakLouderTimerRef.current = null;
+      }
+      // Hide notification since we're getting results now
+      setRecordingNotification({type: null, message: ''});
+
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : null;
         if (!data) {
@@ -1218,6 +1247,12 @@ export function InterviewSessionView() {
             console.log('[Frontend] Silence timeout: pausing recording (text preserved, user can resume or send)');
             userRequestedStopRef.current = true;
             stopBackendStt(false); // PAUSE mode - сохранить текст, не отправлять
+
+            // Show notification that recording paused
+            setRecordingNotification({
+              type: 'paused',
+              message: 'Запись остановлена. Нажмите микрофон чтобы продолжить, или "Отправить" чтобы отправить ответ'
+            });
           }
         }
         silenceTimeoutRef.current = null;
@@ -1260,6 +1295,24 @@ export function InterviewSessionView() {
       console.log('[Frontend] Speech recognition started');
       updateListeningState(true);
       setSttMethod('browser');
+
+      // Clear any previous notifications when starting/resuming recording
+      setRecordingNotification({type: null, message: ''});
+
+      // Start timer to show "speak louder" if no results in 3.5 seconds
+      if (speakLouderTimerRef.current) {
+        clearTimeout(speakLouderTimerRef.current);
+      }
+      speakLouderTimerRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          console.log('[Frontend] Browser STT: No results for 3.5s - showing speak louder notification');
+          setRecordingNotification({
+            type: 'speak-louder',
+            message: 'Говорите громче или ближе к микрофону'
+          });
+        }
+      }, SPEAK_LOUDER_TIMEOUT_MS);
+
       if (isInitialStart) {
         setInterimTranscript('');
       } else {
@@ -1272,17 +1325,25 @@ export function InterviewSessionView() {
       
       // Обновляем время последней активности
       lastSpeechActivityRef.current = Date.now();
-      
+
       // Очищаем таймер молчания при получении результатов
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
         silenceTimeoutRef.current = null;
       }
-      
+
       if (speechPauseTimeoutRef.current) {
         clearTimeout(speechPauseTimeoutRef.current);
         speechPauseTimeoutRef.current = null;
       }
+
+      // Clear "speak louder" timer since we got results
+      if (speakLouderTimerRef.current) {
+        clearTimeout(speakLouderTimerRef.current);
+        speakLouderTimerRef.current = null;
+      }
+      // Hide notification since we're getting results now
+      setRecordingNotification({type: null, message: ''});
       
       for (let i = event.resultIndex || 0; i < event.results.length; i++) {
         const result = event.results[i];
@@ -1318,6 +1379,12 @@ export function InterviewSessionView() {
           // PAUSE mode - сохраняем текст для возможности продолжить говорить или отправить вручную
           if (finalText) {
             setInterimTranscript(finalText);
+
+            // Show notification that recording paused
+            setRecordingNotification({
+              type: 'paused',
+              message: 'Запись остановлена. Нажмите микрофон чтобы продолжить, или "Отправить" чтобы отправить ответ'
+            });
           }
           updateListeningState(false);
           lastSpeechActivityRef.current = null;
@@ -1417,6 +1484,9 @@ export function InterviewSessionView() {
       }
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
+      }
+      if (speakLouderTimerRef.current) {
+        clearTimeout(speakLouderTimerRef.current);
       }
       if (typewriterIntervalRef.current) {
         clearInterval(typewriterIntervalRef.current);
@@ -1666,6 +1736,34 @@ export function InterviewSessionView() {
                 </span>
               </div>
             </div>
+
+            {/* Recording Notifications */}
+            {recordingNotification.type && (
+              <div className={`absolute top-4 left-4 right-4 px-4 py-3 backdrop-blur-md rounded-xl z-10 shadow-lg ${
+                recordingNotification.type === 'speak-louder'
+                  ? 'bg-amber-500/90'
+                  : 'bg-blue-600/90'
+              }`}>
+                <div className="flex items-start gap-3">
+                  {recordingNotification.type === 'speak-louder' ? (
+                    <Mic className="w-5 h-5 text-white flex-shrink-0 mt-0.5 animate-pulse" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm text-white font-medium leading-relaxed">
+                      {recordingNotification.message}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setRecordingNotification({type: null, message: ''})}
+                    className="text-white/70 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Name Tag */}
             <div className="absolute bottom-4 left-4 px-4 py-2.5 bg-black/80 backdrop-blur-md rounded-xl flex items-center gap-3 z-10">
