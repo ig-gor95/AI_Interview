@@ -1917,7 +1917,7 @@ export function InterviewSessionView() {
                 {isListening
                   ? 'ОТПРАВИТЬ ОТВЕТ'
                   : finalTranscriptRef.current?.trim()
-                  ? 'ОТПРАВИТЬ'
+                  ? 'ВОЗОБНОВИТЬ ЗАПИСЬ'
                   : isSpeaking
                   ? 'AI ГОВОРИТ'
                   : 'ОТВЕТ'}
