@@ -81,8 +81,8 @@ async def get_interview_by_token(
             detail="Interview link not found"
         )
     
-    # Check if link is expired
-    if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+    # Check if link is expired (skip for reusable links)
+    if link.expires_at and link.expires_at < datetime.now(timezone.utc) and not link.is_reusable:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Interview link has expired"
@@ -133,8 +133,8 @@ async def register_candidate(
             detail="Interview link not found"
         )
     
-    # Check if link is expired
-    if link.expires_at and link.expires_at < datetime.now(timezone.utc):
+    # Check if link is expired (skip for reusable links)
+    if link.expires_at and link.expires_at < datetime.now(timezone.utc) and not link.is_reusable:
         raise HTTPException(
             status_code=status.HTTP_410_GONE,
             detail="Interview link has expired"
