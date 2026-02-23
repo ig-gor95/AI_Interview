@@ -1215,9 +1215,9 @@ export function InterviewSessionView() {
         if (!userRequestedStopRef.current && useBackendSttRef.current) {
           const finalText = finalTranscriptRef.current.trim();
           if (finalText) {
-            console.log('[Frontend] Silence timeout: stopping and sending text');
+            console.log('[Frontend] Silence timeout: pausing recording (text preserved, user can resume or send)');
             userRequestedStopRef.current = true;
-            stopBackendStt(true); // Отправить текст после молчания (не pause mode)
+            stopBackendStt(false); // PAUSE mode - сохранить текст, не отправлять
           }
         }
         silenceTimeoutRef.current = null;
@@ -1298,14 +1298,14 @@ export function InterviewSessionView() {
       const accumulatedText = finalTranscriptRef.current.trim();
       setInterimTranscript(accumulatedText ? `${accumulatedText} ${currentInterim}` : currentInterim);
       
-      // Таймер молчания: через 6 сек автоматически отправляем текст
+      // Таймер молчания: через 6 сек останавливаем запись, сохраняем текст (пользователь может возобновить или отправить)
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
       }
       silenceTimeoutRef.current = setTimeout(() => {
         if (!userRequestedStopRef.current && isListening) {
           const finalText = finalTranscriptRef.current.trim();
-          console.log('[Frontend] Silence timeout: stopping and sending text:', finalText ? 'has text' : 'no text');
+          console.log('[Frontend] Silence timeout: pausing mic (text preserved, user can resume or send):', finalText ? 'has text' : 'no text');
           userRequestedStopRef.current = true;
           const currentRecognition = (window as any).currentSpeechRecognition;
           if (currentRecognition) {
@@ -1315,11 +1315,9 @@ export function InterviewSessionView() {
               console.log('[Frontend] Error stopping recognition on silence timeout:', e);
             }
           }
-          // Отправляем текст автоматически после молчания
+          // PAUSE mode - сохраняем текст для возможности продолжить говорить или отправить вручную
           if (finalText) {
-            sendTextMessage(finalText);
-            finalTranscriptRef.current = '';
-            setInterimTranscript('');
+            setInterimTranscript(finalText);
           }
           updateListeningState(false);
           lastSpeechActivityRef.current = null;
