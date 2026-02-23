@@ -1215,8 +1215,9 @@ export function InterviewSessionView() {
         if (!userRequestedStopRef.current && useBackendSttRef.current) {
           const finalText = finalTranscriptRef.current.trim();
           if (finalText) {
+            console.log('[Frontend] Silence timeout: stopping and sending text');
             userRequestedStopRef.current = true;
-            stopBackendStt(false); // только остановить запись, не отправлять
+            stopBackendStt(true); // Отправить текст после молчания (не pause mode)
           }
         }
         silenceTimeoutRef.current = null;
@@ -1297,14 +1298,14 @@ export function InterviewSessionView() {
       const accumulatedText = finalTranscriptRef.current.trim();
       setInterimTranscript(accumulatedText ? `${accumulatedText} ${currentInterim}` : currentInterim);
       
-      // Таймер молчания: через 6 сек только останавливаем запись, не отправляем — отправит пользователь кнопкой
+      // Таймер молчания: через 6 сек автоматически отправляем текст
       if (silenceTimeoutRef.current) {
         clearTimeout(silenceTimeoutRef.current);
       }
       silenceTimeoutRef.current = setTimeout(() => {
         if (!userRequestedStopRef.current && isListening) {
           const finalText = finalTranscriptRef.current.trim();
-          console.log('[Frontend] Silence timeout: stopping mic (text not sent), user can Send or resume:', finalText ? 'has text' : 'no text');
+          console.log('[Frontend] Silence timeout: stopping and sending text:', finalText ? 'has text' : 'no text');
           userRequestedStopRef.current = true;
           const currentRecognition = (window as any).currentSpeechRecognition;
           if (currentRecognition) {
@@ -1314,8 +1315,11 @@ export function InterviewSessionView() {
               console.log('[Frontend] Error stopping recognition on silence timeout:', e);
             }
           }
+          // Отправляем текст автоматически после молчания
           if (finalText) {
-            setInterimTranscript(finalText);
+            sendTextMessage(finalText);
+            finalTranscriptRef.current = '';
+            setInterimTranscript('');
           }
           updateListeningState(false);
           lastSpeechActivityRef.current = null;
