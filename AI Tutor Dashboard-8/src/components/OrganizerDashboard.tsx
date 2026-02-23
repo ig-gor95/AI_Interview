@@ -832,7 +832,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onViewE
 
                 <div className="space-y-3 mt-6">
                   <a
-                    href="https://t.me/username"
+                    href="https://t.me/Sofia_ap"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block p-4 border-2 border-blue-200 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
@@ -853,7 +853,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onViewE
                   </a>
 
                   <a
-                    href="tel:+79000000000"
+                    href="tel:+79138325770"
                     className="block p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -864,7 +864,7 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onViewE
                         <h4 className="font-semibold text-gray-900 mb-1">
                           {t.organizerDashboard.callPhone}
                         </h4>
-                        <p className="text-sm text-gray-600">+7 (900) 000-00-00</p>
+                        <p className="text-sm text-gray-600">+7 (913) 832-57-70</p>
                       </div>
                     </div>
                   </a>
