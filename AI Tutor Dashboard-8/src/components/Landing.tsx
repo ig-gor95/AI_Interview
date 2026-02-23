@@ -559,13 +559,13 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                     <div className="relative bg-gradient-to-br from-gray-800/90 to-black/90 rounded-xl border-2 border-gray-600/50 overflow-hidden shadow-2xl aspect-video">
                       <div className="absolute top-3 left-0 right-0 flex items-center justify-center">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 via-purple-600 to-pink-500 flex items-center justify-center text-white text-xl font-bold shadow-2xl ring-4 ring-purple-400/30">
-                          {t.experts.expert1Name.charAt(0)}
+                          А
                         </div>
                       </div>
                       <div className="absolute bottom-2 left-2 right-2">
                         <div className="bg-gradient-to-r from-black/95 via-black/90 to-black/95 backdrop-blur-md rounded-lg border border-white/20 p-2 shadow-xl">
-                          <span className="text-xs text-white font-bold block leading-tight">{t.experts.expert1Name}</span>
-                          <span className="text-xs text-purple-300 font-medium">{t.choice.stage2ExpertRole}</span>
+                          <span className="text-xs text-white font-bold block leading-tight">Алексей Смирнов</span>
+                          <span className="text-xs text-purple-300 font-medium">Senior Engineer, ex-BigTech</span>
                         </div>
                       </div>
                       <div className="absolute top-2 right-2 px-2.5 py-1 bg-green-500 rounded-md shadow-lg">
@@ -582,7 +582,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       </div>
                       <div className="absolute bottom-2 left-2 right-2">
                         <div className="bg-gradient-to-r from-black/95 via-black/90 to-black/95 backdrop-blur-md rounded-lg border border-white/20 p-2 shadow-xl">
-                          <span className="text-xs text-white font-bold leading-tight">{t.demo.candidate}</span>
+                          <span className="text-xs text-white font-bold leading-tight">Кандидат</span>
                         </div>
                       </div>
                     </div>
@@ -593,8 +593,8 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                     <div className="flex items-start gap-3">
                       <Brain className="w-5 h-5 text-purple-300 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-xs text-purple-200 mb-1 font-semibold">{t.choice.stage2TopicLabel}</p>
-                        <p className="text-sm text-white font-medium">{t.choice.stage2Topic}</p>
+                        <p className="text-xs text-purple-200 mb-1 font-semibold">Обсуждаемая тема</p>
+                        <p className="text-sm text-white font-medium">System Design: проектирование highload API</p>
                       </div>
                     </div>
                   </div>
