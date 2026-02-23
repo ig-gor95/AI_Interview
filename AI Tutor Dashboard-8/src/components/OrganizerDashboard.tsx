@@ -143,18 +143,28 @@ export function OrganizerDashboard({ user, sessions, results, onRefresh, onViewE
   const handleDeleteSession = async () => {
     if (!sessionToDelete) return;
 
-    const confirmMessage = language === 'ru'
-      ? `Вы уверены что хотите удалить интервью "${sessionToDelete.params.position || sessionToDelete.params.topic}"?`
-      : `Are you sure you want to delete interview "${sessionToDelete.params.position || sessionToDelete.params.topic}"?`;
-
-    if (!confirm(confirmMessage)) {
-      setSessionToDelete(null);
-      return;
-    }
-
     try {
       console.log('Deleting interview:', sessionToDelete.id);
       await interviewsAPI.deleteInterview(sessionToDelete.id);
+
+      // Show success notification
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2';
+      notification.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+        </svg>
+        <span>${language === 'ru' ? 'Интервью успешно удалено' : 'Interview deleted successfully'}</span>
+      `;
+      document.body.appendChild(notification);
+
+      // Remove notification after 3 seconds
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transition = 'opacity 0.3s';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+
       setSessionToDelete(null);
       onRefresh();
     } catch (error) {
