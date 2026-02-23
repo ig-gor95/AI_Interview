@@ -1554,7 +1554,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
             <div className="p-6 space-y-3">
               {/* Telegram */}
               <a
-                href="https://t.me/yourusername"
+                href="https://t.me/Sofia_ap"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block group bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-200 rounded-xl p-4 hover:shadow-lg hover:border-blue-400 transition-all"
@@ -1577,7 +1577,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
 
               {/* Phone */}
               <a
-                href="tel:+79999999999"
+                href="tel:+79138325770"
                 className="block group bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-4 hover:shadow-lg hover:border-purple-400 transition-all"
               >
                 <div className="flex items-center gap-4">
@@ -1589,7 +1589,7 @@ export function Landing({ onNavigate, onNavigateWithTab }: Props) {
                       {t.organizerDashboard.callPhone}
                     </h4>
                     <p className="text-sm text-gray-600">
-                      +7 (999) 999-99-99
+                      +7 (913) 832-57-70
                     </p>
                   </div>
                   <ArrowRight className="w-5 h-5 text-purple-600 group-hover:translate-x-1 transition-transform" />

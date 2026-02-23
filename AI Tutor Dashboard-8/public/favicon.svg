@@ -1,0 +1,78 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="screen-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6" />
+      <stop offset="50%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#EC4899" />
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(60, 60)">
+    <!-- Monitor frame -->
+    <rect
+      x="-38"
+      y="-30"
+      width="76"
+      height="52"
+      rx="6"
+      fill="url(#screen-gradient)"
+      opacity="0.95"
+    />
+
+    <!-- Screen inner -->
+    <rect
+      x="-33"
+      y="-25"
+      width="66"
+      height="42"
+      rx="3"
+      fill="#1E293B"
+      opacity="0.9"
+    />
+
+    <!-- Screen glow -->
+    <rect
+      x="-30"
+      y="-22"
+      width="60"
+      height="36"
+      rx="2"
+      fill="url(#screen-gradient)"
+      opacity="0.15"
+    />
+
+    <!-- Play button -->
+    <g transform="translate(0, -2)">
+      <circle cx="0" cy="0" r="14" fill="white" opacity="0.95" />
+      <path
+        d="M -5 -7 L -5 7 L 8 0 Z"
+        fill="url(#screen-gradient)"
+      />
+    </g>
+
+    <!-- Monitor stand -->
+    <rect
+      x="-3"
+      y="22"
+      width="6"
+      height="10"
+      rx="1"
+      fill="url(#screen-gradient)"
+      opacity="0.8"
+    />
+
+    <!-- Monitor base -->
+    <rect
+      x="-18"
+      y="30"
+      width="36"
+      height="4"
+      rx="2"
+      fill="url(#screen-gradient)"
+      opacity="0.8"
+    />
+
+    <!-- Recording indicator -->
+    <circle cx="28" cy="-22" r="3" fill="#EF4444" />
+  </g>
+</svg>
