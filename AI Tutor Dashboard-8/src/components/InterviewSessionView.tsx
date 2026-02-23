@@ -1012,8 +1012,10 @@ export function InterviewSessionView() {
     useBackendSttRef.current = true;
     updateListeningState(true);
 
-    // Clear any previous notifications when starting/resuming recording
-    setRecordingNotification({type: null, message: ''});
+    // Clear "paused" notifications when resuming, but keep "speak-louder" warnings
+    setRecordingNotification(prev =>
+      prev.type === 'paused' ? {type: null, message: ''} : prev
+    );
 
     // Start timer to show "speak louder" if no STT results in 3.5 seconds
     if (speakLouderTimerRef.current) {
@@ -1303,10 +1305,13 @@ export function InterviewSessionView() {
       updateListeningState(true);
       setSttMethod('browser');
 
-      // Clear any previous notifications when starting/resuming recording
-      setRecordingNotification({type: null, message: ''});
+      // Clear "paused" notifications when resuming, but keep "speak-louder" warnings
+      setRecordingNotification(prev =>
+        prev.type === 'paused' ? {type: null, message: ''} : prev
+      );
 
       // Start timer to show "speak louder" if no results in 3.5 seconds
+      // (only if no existing speak-louder notification)
       if (speakLouderTimerRef.current) {
         clearTimeout(speakLouderTimerRef.current);
       }
